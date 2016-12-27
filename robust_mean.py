@@ -14,11 +14,20 @@ def robust_mean(x,iter=1,show_step=False):
 		    if Ture, will print mean and std of each step
 
 	'''
+	mean = np.mean(x)
+	std = np.std(x)
 	for i in range(iter):
-		mean = np.mean(x)
-		std = np.std(x)
-		x = x[x<mean+3*std]
-		x = x[x>mean-3*std]
+		y = x[x<mean+3*std]
+		y = y[y>mean-3*std]
+		mean = np.mean(y)
+		std = np.std(y)
+
+		if mean==0 and std==0:   # no data indeed 
+			return np.mean(x),np.std(x)
+		else:
+			x = y                    # try next loop
+			
 		if show_step == True:
 			print 'Iteration:',i+1,' Mean:',round(mean,4),' Std:',round(std,4)
-	return np.mean(x),np.std(x)
+
+	return mean,std
