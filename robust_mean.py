@@ -23,11 +23,11 @@ def robust_mean(x,iter=1,show_step=False):
 		std = np.std(y)
 
 		if mean==0 and std==0:   # no data indeed 
-			return np.mean(x),np.std(x)
+			return x,np.mean(x),np.std(x)
 		else:
 			x = y                    # try next loop
 			
 		if show_step == True:
 			print 'Iteration:',i+1,' Mean:',round(mean,4),' Std:',round(std,4)
 
-	return mean,std
+	return x,mean,std

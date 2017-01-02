@@ -8,28 +8,27 @@ cat = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat = cat[cat['p_gc']>0.95] # sort out the GCs
 cat_ucd = Table.read('NGVS.pilot.92ucds.fits')
 M87 = (187.70583, 12.39111)
-DM = 22.2*1000 # in Kpc
-radius_max = 420. #kpc   max radius for bin statistics (gc and ucd)
+DIS = 22.2*1000 # in Kpc (luminosity distance from NED)
+radius_max = 440. #kpc   max radius for bin statistics (gc and ucd)
 
 # Bin Statistics for gc
 dis_list = []
 for i in range(len(cat)):
 	ra = cat[i]['ra']
 	dec = cat[i]['dec']
-	distance = sqrt((ra-M87[0])**2+(dec-M87[1])**2)  # in degree
-	#distance = acos(sin(dec)*sin(M87[1])+cos(dec)*cos(M87[1])*cos(abs(ra-M87[0]))) # in degree
-	distance = distance/180.*pi*DM
+	distance = sqrt((ra-M87[0])**2+(dec-M87[1])**2) /180.*pi*DIS # in kpc
 	dis_list.append(distance)
 
 #bins_gc = bin edges, set larger bin size for larger distance from M87 
-bins_gc = np.arange(0.,400.,1.)**1.43
+bins_gc = np.arange(0.3,430.,1.)**1.43
 bins_gc = bins_gc[bins_gc<radius_max]
+
 count_gc_binned = scipy.stats.binned_statistic(dis_list,dis_list,statistic='count',bins=bins_gc,range=(0.,radius_max))
 bin_mean_gc = scipy.stats.binned_statistic(dis_list,dis_list,statistic='mean',bins=bins_gc,range=(0.,radius_max))[0] #mean value for distance in each bin
+
 bin_mean_gc[0]=0
 gc_counts = np.array(count_gc_binned[0],dtype='f8')
 gc_counts_err = np.sqrt(gc_counts)
-bin_left_edges = np.array(count_gc_binned[1][:-1],dtype='f8')  #0,2,4,6 ...
 areas = np.array([],dtype='f4')
 for i in range(len(bins_gc[:-1])):
 	areas = np.append(areas, (bins_gc[i+1]**2 - bins_gc[i]**2)*pi)
@@ -42,8 +41,7 @@ for i in range(len(cat_ucd)):
 	ra_ucd = cat_ucd[i]['RA']
 	dec_ucd = cat_ucd[i]['DEC']
 	distance_ucd = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)  # in degree
-	#distance = acos(sin(dec)*sin(M87[1])+cos(dec)*cos(M87[1])*cos(abs(ra-M87[0]))) # in degree
-	distance_ucd = distance_ucd/180.*pi*DM
+	distance_ucd = distance_ucd/180.*pi*DIS #in kpc
 	dis_list_ucd.append(distance_ucd)
 
 
@@ -70,7 +68,7 @@ gc_density_fit = gc_density_fit[bin_mean_gc_fit<250.]
 bin_mean_gc_fit = bin_mean_gc_fit[bin_mean_gc_fit<250.]
 slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(np.log(bin_mean_gc_fit),np.log(gc_density_fit))
 abline_values = [radius**slope*exp(intercept) for radius in np.arange(1,1000)]
-# print slope,intercept
+print slope,intercept
 
 #mask the bins that contains no ucd
 ucd_density_fit = ucd_density[fit_min/bs_ucd:fit_max/bs_ucd] # fit range [20.,250.]
