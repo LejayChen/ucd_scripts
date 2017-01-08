@@ -15,15 +15,9 @@ dec_gc = np.array(cat_gc['dec'])  #Dec of GCs
 step = 0.5  # in kpc
 radius = np.arange(0.25,4.25,step)   # in kpc  from 0.25 to 3.75 step 0.5
 str_radius = str(radius).strip('[]').split()  #for table name
-tab_names = ['ID','ra','dec','DIS','r_h']
-for str_r in str_radius:
-	tab_names.append(str_r+'_count')
-	tab_names.append(str_r+'_C')
-tab_dtype = ['a8','f8','f8','f4','f4']+['i2','f4']*len(radius)
-ucd_data = Table(names=(tab_names),dtype=(tab_dtype))
 
 gc_count_total = 0
-C = np.array([])   # C=clustering signal     (measured/bkg)
+gc_exps = np.array([])   # C=clustering signal     (measured/bkg)
 gc_counts = np.array([])  # count of GCs 
 dis_ucd_gc_list = np.array([])  # list of each gc's distance to UCD
 
@@ -39,7 +33,6 @@ for i in range(len(cat_ucd)):
 		continue
 	exp_density = exp(5.09201844251)*dis_M87_ucd**(-1.85787561291)   # expected density (assume uniform in the vicinity of a UCD)
 	bkg_unif = exp(5.09201844251)*270**(-1.85787561291)    # uniform bakground in the field (possibly non-GC objects)
-	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h]
 
 	dis_ucd_gc_mask = np.array([])
 	print '============',str(ID),ra_ucd,dec_ucd,round(dis_M87_ucd,4),'================='
@@ -55,10 +48,9 @@ for i in range(len(cat_ucd)):
 		gc_count_total += gc_count
 		gc_count_cor =gc_count -bkg_unif*area
 		#Clustering Signal
-		C = np.append(C,gc_count_cor/gc_expected) 
-		gc_counts = np.append(gc_counts,gc_count)
-		col_value.append(len(dis_ucd_gc_mask))
-		col_value.append(gc_count_cor/gc_expected)
+
+		gc_counts = np.append(gc_counts,gc_count_cor)
+		gc_exps = np.append(gc_exps,gc_expected)
 
 		# gc distance to host UCD
 		if gc_count == 0:
@@ -68,8 +60,6 @@ for i in range(len(cat_ucd)):
 
 		print ID,r,round(gc_count,4),round(gc_expected,4),round(gc_count_cor/gc_expected,4)
 
-	ucd_data.add_row(col_value)
-
 '''
    This part is statistics for the clustering signal
     Mean Value, Standard Error, etc...
@@ -77,42 +67,36 @@ for i in range(len(cat_ucd)):
 '''
 
 dis_ucd_gc_list = dis_ucd_gc_list.reshape(len(dis_ucd_gc_list)/len(radius),len(radius)) 
-C = C.reshape(len(C)/len(radius),len(radius)) 
+gc_exps = gc_exps.reshape(len(gc_exps)/len(radius),len(radius)) 
 gc_counts = gc_counts.reshape(len(gc_counts)/len(radius),len(radius)) 
-#C = C[C[:,0]+C[:,1]>0]
-C_mean = np.array([])
-C_std = np.array([])
+
+gc_exps_mean = np.array([])
+gc_exps_std = np.array([])
+gc_counts_mean = np.array([])
+gc_counts_std = np.array([])
 for i in range(len(radius)):# histagram for C signal distribution 
 	print '========= C statistics for r =',radius[i],'============'
-	C_r = C[:,i]
-	C_r,mean_r,std_r = robust_mean(C[:,i],iter=0,show_step=True)
+	gc_exps_r = gc_exps[:,i]
+	gc_exps_r,exps_mean_r,exps_std_r = robust_mean(gc_exps[:,i],iter=0,show_step=True)
+	gc_counts_r = gc_counts[:,i]
+	gc_counts_r,counts_mean_r,counts_std_r = robust_mean(gc_counts[:,i],iter=0,show_step=True)
 
-	fig, ax = plt.subplots()
-	ax.hist(C_r,bins=10)
-	ax.set_title(str(radius[i])+'~'+str(radius[i]+step))
-	plt.savefig('C.hist.'+str(radius[i])+'.png')
+	gc_exps_mean = np.append(gc_exps_mean,exps_mean_r)   #robust averge gc_exps signal over all UCDs
+	gc_exps_std = np.append(gc_exps_std,exps_std_r)  #robust averge C signal over all UCDs
+	gc_counts_mean = np.append(gc_counts_mean,counts_mean_r)   #robust averge gc_counts signal over all UCDs
+	gc_counts_std = np.append(gc_counts_std,counts_std_r)  #robust averge C signal over all UCDs
 
-	fig2, ax2 = plt.subplots()
-	ax2.hist(gc_counts[:,i],bins=range(0, 8, 1))
-	ax2.set_title(str(radius[i])+'~'+str(radius[i]+step))
-	plt.savefig('C.gc.count.hist.'+str(radius[i])+'.png')
-
-	C_mean = np.append(C_mean,mean_r)   #robust averge C signal over all UCDs
-	C_std = np.append(C_std,std_r)  #robust averge C signal over all UCDs
-C_max = np.max(C,0)  #max
-C_min = np.min(C,0)  #min
+C_mean = gc_counts_mean/gc_exps_mean
+C_std = gc_exps_std/gc_exps_std
 dis_ucd_gc_list_mean = np.nanmean(dis_ucd_gc_list,0)
 
 print '=================C clustering signal======================'
 np.set_printoptions(precision=2)
-print 'Number of UCDs:',C.shape[0],', Number of GCs:',gc_count_total
+print 'Number of UCDs:',gc_counts.shape[0],', Number of GCs:',gc_count_total
 print 'Radius bins:',radius
 print 'Mean DIS:',dis_ucd_gc_list_mean
 print 'Mean:',C_mean
 print 'Std:',C_std/sqrt(len(cat_ucd)) 
-print 'Max:',C_max
-print 'Min:', C_min
-ucd_data.write('ucd_gc_clustering.fits',overwrite=True)
 
 #plot the final figure
 fig, ax = plt.subplots()
@@ -124,4 +108,4 @@ ax.tick_params(which='major',length=12)
 ax.tick_params(which='minor',length=5) 
 ax.set_xlim(0,4.25)
 ax.set_ylim(0,int(C_mean.max())+2)
-plt.savefig('clustering.new.png')
+plt.savefig('clustering.new.stack.png')
