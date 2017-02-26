@@ -1,7 +1,7 @@
 from astropy.table import *
 from math import *
 from robust_mean import *
-from func import func
+from func import *
 import numpy as np
 import matplotlib.pyplot as plt
 DIS = 17.21*1000 #kpc
@@ -29,23 +29,39 @@ C = np.array([])   # C=clustering signal     (measured/bkg)
 gc_counts = np.array([])  # count of GCs 
 dis_ucd_gc_list = np.array([])  # list of each gc's distance to UCD
 
+def bkg_2d(ra,dec):
+	dis_ra = (ra - M87[0])/180.*pi*DIS  
+	dis_dec = (dec - M87[1])/180.*pi*DIS  
+	n = -1.5716456
+	PA =  0.658513273
+	e = 0.740146285
+	H = 85.1889069
+	C = -0.0123046213
+
+	exp_density = func((dis_ra,dis_dec), n, PA, e, H, C)
+	return exp_density
+
 for i in range(len(cat_ucd)): 
 	ID = cat_ucd[i]['INDEX']
 	ra_ucd = cat_ucd[i]['RA']
 	dec_ucd = cat_ucd[i]['DEC']
 	r_h = cat_ucd[i]['RH']
-	g_i = cat_ucd[i]['MAG_BEST'][1] - cat_ucd[i]['MAG_BEST'][3] 
+	g_i = cat_ucd[i]['MAGCOR_AP8'][1] - cat_ucd[i]['MAGCOR_AP8'][3] 
 
 	dis_M87_ucd = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS  # in kpc (scalar)
 	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 	if dis_M87_ucd>190 or dis_M87_ucd<15:
 		continue
-	
-	exp_density = exp(5.10118386605)*dis_M87_ucd**(-1.85088530618 )   # expected density (assume uniform in the vicinity of a UCD)
-	bkg_unif = exp(5.10118386605)*200**(-1.85088530618)    # uniform bakground in the field (possibly non-GC objects)	
-	#exp_density = func(((ra_ucd-M87[0])/180*pi*DIS,(dec_ucd-M87[1])/180*pi*DIS), -1.732794,  123.30887701)  
-	#bkg_unif = 0                                                                        
-	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g_i]
+
+	'''1D'''
+	#exp_density = exp(5.10118386605)*dis_M87_ucd**(-1.85088530618 )   # expected density (assume uniform in the vicinity of a UCD)
+	#bkg_unif = exp(5.10118386605)*200**(-1.85088530618)    # uniform bakground in the field (possibly non-GC objects)	
+
+	'''2D'''
+	exp_density = bkg_2d(ra_ucd,dec_ucd)
+	#bkg_unif = bkg_2d(ra_ucd,dec_ucd)                                   
+
+	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g_i]  #prepare for the info table
 
 	dis_ucd_gc_mask = np.array([])
 	print '============',str(ID),ra_ucd,dec_ucd,round(dis_M87_ucd,4),'================='
