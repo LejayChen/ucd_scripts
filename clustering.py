@@ -10,6 +10,7 @@ M87 = (187.70583, 12.39111)
 cat_ucd = Table.read('NGVS.pilot.92ucds.fits')  #catalog of UCDs
 cat_gc = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat_gc = cat_gc[cat_gc['p_gc']>0.95]   #masked (p_gc>0.95) catalog of GCs
+cat_gc = cat_gc[cat_gc['gmag']<24] 
 ra_gc = np.array(cat_gc['ra'])      #RA of GCs
 dec_gc = np.array(cat_gc['dec'])  #Dec of GCs
 
@@ -24,7 +25,7 @@ for str_r in str_radius:
 tab_dtype = ['a8','f8','f8','f4','f4','f4']+['i2','f2','f4']*len(radius)
 ucd_data = Table(names=(tab_names),dtype=(tab_dtype))
 
-gc_count_total = 0
+
 C = np.array([])   # C=clustering signal     (measured/bkg)
 gc_counts = np.array([])  # count of GCs 
 dis_ucd_gc_list = np.array([])  # list of each gc's distance to UCD
@@ -39,7 +40,30 @@ def bkg_2d(ra,dec):
 	C = -0.0123046213
 
 	exp_density = func((dis_ra,dis_dec), n, PA, e, H, C)
-	return exp_density
+	bkg_unif = 0
+	return exp_density,bkg_unif
+
+def bkg_1d(dis_M87_ucd,slope, intercept):
+	exp_density = exp(intercept)*dis_M87_ucd**(slope)  # expected density (assume uniform in the vicinity of a UCD)
+	bkg_unif = exp(intercept)*200**(slope)    # uniform bakground in the field (possibly non-GC objects)	
+	return exp_density,bkg_unif
+
+def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
+	dis_ucd_gc_mask = np.array([])
+	gc_count_total = 0
+
+	#mask out the area for counting  (ring shaped mask from r to r+step)
+	dis_ucd_gc_mask = dis_ucd_gc[dis_ucd_gc<(r+step)] #outer bound
+	dis_ucd_gc_mask = dis_ucd_gc_mask[dis_ucd_gc_mask>r]  #inner bound
+	area = pi*((r+step)**2-r**2)  # area of that ring  (in kpc^2)
+
+	# expected count and measued count of GCs
+	gc_expected = (exp_density-bkg_unif)*area
+	gc_count = len(dis_ucd_gc_mask)
+	gc_count_total += gc_count
+	gc_count_cor =gc_count -bkg_unif*area
+
+	return gc_count, gc_count_cor, gc_count_total, gc_expected, dis_ucd_gc_mask
 
 for i in range(len(cat_ucd)): 
 	ID = cat_ucd[i]['INDEX']
@@ -48,34 +72,20 @@ for i in range(len(cat_ucd)):
 	r_h = cat_ucd[i]['RH']
 	g_i = cat_ucd[i]['MAGCOR_AP8'][1] - cat_ucd[i]['MAGCOR_AP8'][3] 
 
-	dis_M87_ucd = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS  # in kpc (scalar)
-	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
+	dis_M87_ucd = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
 	if dis_M87_ucd>190 or dis_M87_ucd<15:
 		continue
 
-	'''1D'''
-	#exp_density = exp(5.10118386605)*dis_M87_ucd**(-1.85088530618 )   # expected density (assume uniform in the vicinity of a UCD)
-	#bkg_unif = exp(5.10118386605)*200**(-1.85088530618)    # uniform bakground in the field (possibly non-GC objects)	
-
-	'''2D'''
-	exp_density = bkg_2d(ra_ucd,dec_ucd)
-	#bkg_unif = bkg_2d(ra_ucd,dec_ucd)                                   
+	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.82326022664, intercept = 4.92164485887)
+	#exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)                         
 
 	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g_i]  #prepare for the info table
+	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 
-	dis_ucd_gc_mask = np.array([])
 	print '============',str(ID),ra_ucd,dec_ucd,round(dis_M87_ucd,4),'================='
 	for r in radius:
-                            #mask out the area for counting  (ring shaped mask from r to r+step)
-		dis_ucd_gc_mask = dis_ucd_gc[dis_ucd_gc<(r+step)] #outer bound
-		dis_ucd_gc_mask = dis_ucd_gc_mask[dis_ucd_gc_mask>r]  #inner bound
-		area = pi*((r+step)**2-r**2)  # area of that ring  (in kpc^2)
+		gc_count, gc_count_cor,gc_count_total, gc_expected, dis_ucd_gc_mask = gc_stat(dis_ucd_gc, exp_density, bkg_unif)
 
-		# expected count and measued count of GCs
-		gc_expected = (exp_density-bkg_unif)*area
-		gc_count = len(dis_ucd_gc_mask)
-		gc_count_total += gc_count
-		gc_count_cor =gc_count -bkg_unif*area
 		#Clustering Signal
 		C = np.append(C,gc_count_cor/gc_expected) 
 		gc_counts = np.append(gc_counts,gc_count)
@@ -102,13 +112,13 @@ for i in range(len(cat_ucd)):
 dis_ucd_gc_list = dis_ucd_gc_list.reshape(len(dis_ucd_gc_list)/len(radius),len(radius)) 
 C = C.reshape(len(C)/len(radius),len(radius)) 
 gc_counts = gc_counts.reshape(len(gc_counts)/len(radius),len(radius)) 
-#C = C[C[:,0]+C[:,1]>0]
+C = C[C[:,0]+C[:,1]>0]
 C_mean = np.array([])
 C_std = np.array([])
 for i in range(len(radius)):# histogram for C signal distribution 
 	print '========= C statistics for r =',radius[i],'============'
 	C_r = C[:,i]
-	C_r,mean_r,std_r = robust_mean(C[:,i],iter=0,show_step=True)
+	C_r,mean_r,std_r = robust_mean(C[:,i],iter=1,show_step=True)
 
 	fig, ax = plt.subplots()
 	ax.hist(C_r,bins=10)
