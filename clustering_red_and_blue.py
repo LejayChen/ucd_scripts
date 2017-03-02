@@ -19,31 +19,37 @@ ra_gc = np.array(cat_gc['ra'])      #RA of GCs
 dec_gc = np.array(cat_gc['dec'])  #Dec of GCs
 #cat_gc = cat_gc[cat_gc['gmag']<24] 
 
-cat_gc_b = cat_gc[cat_gc['gmag'] - cat_gc['imag']<0.87] 
+cat_gc_b = cat_gc[cat_gc['gmag'] - cat_gc['imag']<0.89] 
 ra_gc_b = np.array(cat_gc_b['ra'])      #RA of GCs
 dec_gc_b = np.array(cat_gc_b['dec'])  #Dec of GCs
 
-cat_gc_r = cat_gc[cat_gc['gmag'] - cat_gc['imag']>0.87] 
+cat_gc_r = cat_gc[cat_gc['gmag'] - cat_gc['imag']>0.89] 
 ra_gc_r = np.array(cat_gc_r['ra'])      #RA of GCs
 dec_gc_r = np.array(cat_gc_r['dec'])  #Dec of GCs
 
 step = 0.5  # in kpc
-radius = np.arange(0.5,4.5,step)   # in kpc  from 0.25 to 3.75 step 0.5
+radius = np.arange(0.25,4.25,step)   # in kpc  from 0.25 to 3.75 step 0.5
 str_radius = str(radius).strip('[]').split()  #for table name
 tab_names = ['ID','ra','dec','DIS','r_h','g-i']
 for str_r in str_radius:
 	tab_names.append(str_r+'_count')
 	tab_names.append(str_r+'_count_cor')
 	tab_names.append(str_r+'_C')
-tab_dtype = ['a8','f8','f8','f4','f4','f4']+['i2','f2','f4']*len(radius)
+	tab_names.append(str_r+'_count_blue')
+	tab_names.append(str_r+'_count_cor_blue')
+	tab_names.append(str_r+'_C_blue')
+	tab_names.append(str_r+'_count_red')
+	tab_names.append(str_r+'_count_cor_red')
+	tab_names.append(str_r+'_C_red')
+tab_dtype = ['a8','f8','f8','f4','f4','f4']+['i2','f2','f4']*len(radius)*3
 ucd_data = Table(names=(tab_names),dtype=(tab_dtype))
 
 gc_count_total = 0
+
 C = np.array([])   # C=clustering signal     (measured/bkg)
 gc_counts = np.array([])  # count of GCs 
 dis_ucd_gc_list = np.array([])  # list of each gc's distance to UCD
 
-gc_count_total = 0
 C_b = np.array([])   
 gc_counts_b = np.array([])  
 dis_ucd_gc_list_b = np.array([])  
@@ -67,7 +73,7 @@ def bkg_2d(ra,dec):
 
 def bkg_1d(dis_M87_ucd,slope, intercept):
 	exp_density = exp(intercept)*dis_M87_ucd**(slope)  # expected density (assume uniform in the vicinity of a UCD)
-	bkg_unif = exp(intercept)*200**(slope)    # uniform bakground in the field (possibly non-GC objects)	
+	bkg_unif = 0#exp(intercept)*270**(slope)    # uniform bakground in the field (possibly non-GC objects)	
 	return exp_density,bkg_unif
 
 def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
@@ -91,28 +97,34 @@ def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
 def C_ave(gc_counts, dis_ucd_gc_list, C):
 	'''
 	calculate averaged C value among UCDs
+	dis_ucd_gc_list_mean: distance from GC to UCD in each bin averaged for all UCDs (list)
 	'''
 	dis_ucd_gc_list = dis_ucd_gc_list.reshape(len(dis_ucd_gc_list)/len(radius),len(radius)) 
-	C = C.reshape(len(C)/len(radius),len(radius)) 
+	dis_ucd_gc_list_mean = np.nanmean(dis_ucd_gc_list,0) 
+
 	gc_counts = gc_counts.reshape(len(gc_counts)/len(radius),len(radius)) 
-	#C = C[C[:,0]+C[:,1]>0]
+	gc_counts_mean = np.nanmean(gc_counts,0) 
+
+	C = C.reshape(len(C)/len(radius),len(radius)) 
+
+	#C = C[gc_counts[:,0]+gc_counts[:,1]>0]
 	C_mean = np.array([])
 	C_std = np.array([])
 	for i in range(len(radius)):
 		logfile.write('========= C statistics for r ='+str(radius[i])+'============\n')
 		C_cloumn = C[:,i]
-		C_cloumn, mean, std,log_robust_mean = robust_mean(C[:,i],iter=0,show_step=True)
-		if log_robust_mean != ' ': logfile.write(log_robust_mean)
+		C_cloumn, mean, std,robust_mean_log = robust_mean(C[:,i],iter=0,show_step=True)
+		logfile.write(robust_mean_log)
 		C_mean = np.append(C_mean,mean)   #robust averge C signal over all UCDs
 		C_std = np.append(C_std,std)  #robust averge C signal over all UCDs
 	C_max = np.max(C,0)  #max
 	C_min = np.min(C,0)    #min
-	dis_ucd_gc_list_mean = np.nanmean(dis_ucd_gc_list,0)
-	return C_mean,C_std,dis_ucd_gc_list_mean
+
+	return C_mean,C_std,dis_ucd_gc_list_mean,gc_counts_mean
 
 def mean_dis(dis_ucd_gc_list, gc_count, dis_ucd_gc_mask):
 	'''
-	GC distance to host UCD
+	GC mean distance to host UCD for individual UCD
 	'''
 	if gc_count == 0:
 		dis_ucd_gc_list = np.append(dis_ucd_gc_list, np.NaN)
@@ -132,9 +144,9 @@ for i in range(len(cat_ucd)):
 	if dis_M87_ucd>190 or dis_M87_ucd<15:
 		continue
 
-	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.84539280985, intercept = 5.07330399332)
-	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd,slope = -1.65574548112, intercept = 3.98509677054)
-	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd,slope = -1.87975286933, intercept = 4.07040541314)
+	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.89827756001, intercept = 5.26216641247)
+	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.72152885995, intercept = 4.2557020942)
+	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.0779945286, intercept = 4.79429803534)
 
 	#exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)                         
 
@@ -147,7 +159,7 @@ for i in range(len(cat_ucd)):
 	for r in radius:
 		'''
 		  gc_count is a scalar (number of GCs in each bin)
-		  gc_counts is a list (number of GCs for every bin)
+		  gc_counts is a list of gc_count (number of GCs for every bin)
 		'''
 		gc_count, gc_count_cor, gc_expected, dis_ucd_gc_mask = gc_stat(dis_ucd_gc, exp_density, bkg_unif)
 		gc_count_b, gc_count_cor_b, gc_expected_b, dis_ucd_gc_mask_b = gc_stat(dis_ucd_gc_b, exp_density_b, bkg_unif_b)
@@ -169,48 +181,50 @@ for i in range(len(cat_ucd)):
 		col_value.append(gc_count)
 		col_value.append(gc_count_cor)
 		col_value.append(gc_count_cor/gc_expected)
-		'''
 		col_value.append(gc_count_b)
 		col_value.append(gc_count_cor_b)
 		col_value.append(gc_count_cor_b/gc_expected_b)
 		col_value.append(gc_count_r)
 		col_value.append(gc_count_cor_r)
 		col_value.append(gc_count_cor_r/gc_expected_r)
-		'''
+
 		write_to_log = np.array( [r, gc_count, gc_count_b, gc_count_r, gc_expected, gc_count_cor/gc_expected],dtype=np.float16)
 		logfile.write(np.array_str(write_to_log)+'\n')
 
 	ucd_data.add_row(col_value)
 
 logfile.write('=================C clustering signal======================\n')
-C_mean, C_std, dis_ucd_gc_list_mean = C_ave(gc_counts, dis_ucd_gc_list, C)
-C_mean_b, C_std_b, dis_ucd_gc_list_mean_b = C_ave(gc_counts_b, dis_ucd_gc_list_b, C_b)
-C_mean_r, C_std_r, dis_ucd_gc_list_mean_r = C_ave(gc_counts_r, dis_ucd_gc_list_r, C_r)
+C_mean, C_std, dis_ucd_gc_list_mean, gc_counts_mean = C_ave(gc_counts, dis_ucd_gc_list, C)
+C_mean_b, C_std_b, dis_ucd_gc_list_mean_b, gc_counts_mean_b = C_ave(gc_counts_b, dis_ucd_gc_list_b, C_b)
+C_mean_r, C_std_r, dis_ucd_gc_list_mean_r, gc_counts_mean_r = C_ave(gc_counts_r, dis_ucd_gc_list_r, C_r)
 
 np.set_printoptions(precision=2)
-print 'Number of UCDs:',C.shape[0]
+print 'Number of UCDs:',C.shape[0]/len(radius)
 print 'Radius bins:',radius
 print '==============================='
 print 'Mean DIS:',dis_ucd_gc_list_mean
-print 'Mean:',C_mean
+print 'Mean C:',C_mean
+print 'GC counts Mean:',gc_counts_mean
 print 'Std:',C_std/sqrt(len(cat_ucd)) 
 print '==============================='
 print 'Blue Mean DIS:',dis_ucd_gc_list_mean_b
-print 'Blue Mean:',C_mean_b
+print 'Blue Mean C:',C_mean_b
+print 'Blue GC counts Mean:',gc_counts_mean_b
 print 'Blue Std:',C_std_b/sqrt(len(cat_ucd)) 
 print '==============================='
 print 'Red Mean DIS:',dis_ucd_gc_list_mean_r
-print 'Red Mean:',C_mean_r
+print 'Red Mean C:',C_mean_r
+print 'Red GC counts Mean:',gc_counts_mean_r
 print 'Red Std:',C_std_r/sqrt(len(cat_ucd)) 
 #print 'Max:',C_max
 #print 'Min:', C_min
-ucd_data.write('ucd_gc_clustering.fits',overwrite=True)
+ucd_data.write('clustering.fits',overwrite=True)
 
 #plot the final figure
 fig, ax = plt.subplots()
-ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(len(cat_ucd)),fmt='ko')
-ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(len(cat_ucd)),fmt='bs')
-ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(len(cat_ucd)),fmt='r^')
+ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(len(cat_ucd)),fmt='ko',label = 'All GCs')
+ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(len(cat_ucd)),fmt='bs',label = 'Blue GCs')
+ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(len(cat_ucd)),fmt='r^',label = 'Red GCs')
 ax.axhline(y=1,xmin=0,xmax=4,color='k')
 ax.set_xlabel('Aperture around UCD [kpc]',fontsize=16)
 ax.set_ylabel(r'C=<$\Sigma_{\rm measured}/\Sigma_{\rm expected}$>',fontsize=17)
@@ -218,7 +232,8 @@ ax.tick_params(which='major',length=12)
 ax.tick_params(which='minor',length=5) 
 ax.set_xlim(0.25,4.5)
 ax.set_ylim(0,int(C_mean.max())+2)
+ax.legend(numpoints=1,frameon=False,loc='upper right')
 plt.savefig('clustering.new.blueandred.png')
-plt.savefig('./pics/clustering_blueandred'+str_radius[0]+'_'+str(step)+'.eps')
+plt.savefig('./pics/clustering.blueandred'+str_radius[0]+'_'+str(step)+'.eps')
 
 logfile.close()
