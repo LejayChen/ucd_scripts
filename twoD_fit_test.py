@@ -9,7 +9,21 @@ from func import *
 
 spacing = 4
 fit_min =15
-fit_max = 190
+fit_max = 210
+
+def mask(ra_dis_dEN, dec_dis_dEN, original_data):
+	for i in range(len(ra_dis_dEN)):
+		if abs(ra_dis_dEN[i])>fit_max or  abs(dec_dis_dEN[i])>fit_max:
+			continue
+		index_ra = int((ra_dis_dEN[i] + fit_max - spacing/2)/spacing)
+		index_dec = int((dec_dis_dEN[i] + fit_max - spacing/2)/spacing)
+		sf = 8 #smooth factor
+		a = original_data[index_ra,index_dec]
+		original_data[index_ra-2:index_ra+3,index_dec-2:index_dec+3] = np.mean(original_data[index_ra-sf:index_ra+sf+1,index_dec-sf:index_dec+sf+1])*0.9
+		masked_data = original_data
+		#print original_data[index_ra,index_dec] - a
+
+	return masked_data
 
 def fit(bin_stats):
 	x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
@@ -26,17 +40,6 @@ def fit(bin_stats):
 	yy_ravel=yy.ravel()[~np.isnan(yy.ravel())]
 	bin_stats_ravel=bin_stats.ravel()[~np.isnan(bin_stats.ravel())]
 
-	'''
-	PA = 1.2/4*pi
-	sigmax = 11
-	sigmay = 11
-	H = 300
-	initial_guess = [PA, sigmax, sigmay, H]
-
-	lower = [-pi,0, 0, 0]
-	upper = [pi, np.inf,np.inf, 3000]
-	bounds = [lower, upper]
-	'''
 	# Guess intial parameters
 	n = -2
 	PA = 1.2/4*pi
@@ -67,44 +70,24 @@ def fit(bin_stats):
 	H3 = exp(5.07330399332)
 	err_1D_3 = err_func_1D((xx_ravel,yy_ravel),bin_stats_ravel,n3,H3)
 
-	print '2D fitting error:',err,'1D fitting',err_1D,err_1D_2,err_1D_3
+	print '2D fitting error:',err,
+	print '1D fitting error',err_1D,err_1D_2,err_1D_3
 	print 'parameter standard error 2D:',perr
 
-	return pred_params
-
-def fit_test(data_gen_value):
-	x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-	y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-	xx, yy = np.meshgrid(x, y)
-	for i in range(len(x)):
-		for j in range(len(y)):
-			if sqrt(x[i]**2+y[j]**2)<fit_min or sqrt(x[i]**2+y[j]**2)>fit_max:
-				xx[i,j],yy[i,j],data_gen_value[i,j]=  np.NaN,np.NaN,np.NaN
-	xx_ravel=xx.ravel()[~np.isnan(xx.ravel())]
-	yy_ravel=yy.ravel()[~np.isnan(yy.ravel())]
-	data_gen_ravel=data_gen_value.ravel()[~np.isnan(data_gen_value.ravel())]
-	# Guess intial parameters
-	n = -1.1
-	PA = 1.2/4*pi
-	e = 0.795
-	H = 600
-	initial_guess = [n, PA, e, H]
-
-	lower = [-np.inf, 0.1, 0.1, 1]
-	upper = [-0.1, np.inf, 1, 30000]
-	bounds = [lower, upper]
-
-	pred_params, uncert_cov = curve_fit(func, (xx_ravel, yy_ravel), data_gen_ravel,p0=initial_guess,bounds=bounds)
-	err =err_func((xx_ravel, yy_ravel), data_gen_ravel ,pred_params[0],pred_params[1],pred_params[2],pred_params[3],pred_params[4])
-	print uncert_cov,err
 	return pred_params
 
 M87 = (187.70583, 12.39111)
 DIS = 17.21*1000 # in Kpc (luminosity distance from Mei et.al. 2011)
 cat_gc = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat_gc = cat_gc[cat_gc['p_gc']>0.95]
-cat_gc = cat_gc[np.sqrt((cat_gc['ra']-M87[0])**2+(cat_gc['dec']-M87[1])**2) /180.*pi*DIS<fit_max+spacing]
-#cat_gc = cat_gc[np.sqrt((cat_gc['ra']-M87[0])**2+(cat_gc['dec']-M87[1])**2) /180.*pi*DIS>fit_min]
+cat_gc = cat_gc[np.sqrt((cat_gc['ra']-M87[0])**2+(cat_gc['dec']-M87[1])**2) /180.*pi*DIS<fit_max]
+cat_gc = cat_gc[np.sqrt((cat_gc['ra']-M87[0])**2+(cat_gc['dec']-M87[1])**2) /180.*pi*DIS>fit_min]
+
+cat_dEN = Table.read('pp.gal.nuc2.s.master.new.fits')
+ra_dEN = cat_dEN['RA']
+dec_dEN = cat_dEN['DEC'] 
+ra_dis_dEN = np.array((ra_dEN-M87[0]) /180.*pi*DIS) # in kpc
+dec_dis_dEN = np.array((dec_dEN-M87[1]) /180.*pi*DIS) # in kpc
 
 ra = cat_gc['ra']
 dec = cat_gc['dec']
@@ -115,13 +98,15 @@ dis_dec = np.array((dec-M87[1]) /180.*pi*DIS) # in kpc
 bin_ra = np.arange(-fit_max,fit_max+.1,spacing)
 bin_dec = np.arange(-fit_max,fit_max+.1,spacing)
 ret = stats_2d(dis_ra,dis_dec,None,'count',bins=[bin_ra,bin_dec])
-values = ret.statistic/(spacing**2)  #2D statistic
+values = mask(ra_dis_dEN, dec_dis_dEN, ret.statistic/(spacing**2))  #2D statistic
+#values = ret.statistic/(spacing**2)
 values[np.isnan(values)]=0.0
 
 #==========plot data======================================
 plt.hist2d(dis_ra,dis_dec,bins=[bin_ra,bin_dec])
 plt.colorbar()
 plt.show()
+
 #======fit data======
 pred_params = fit(values)
 print pred_params
@@ -130,8 +115,6 @@ print pred_params
 x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
 y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
 xx, yy = np.meshgrid(x, y)
-#data_gen_value = data_gen(func,xx,yy)
-#pred_params = fit_test(data_gen_value)
 
 #=================plot residual==============================
 func_value = func((xx,yy),pred_params[0],pred_params[1],pred_params[2],pred_params[3],pred_params[4])
