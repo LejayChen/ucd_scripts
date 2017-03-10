@@ -12,30 +12,32 @@ fit_min =15
 fit_max = 210
 np.set_printoptions(precision=2)
 
-def mask(ra_dis_dEN, dec_dis_dEN, original_data):
+def mask(xx, yy, ra_dis_dEN, dec_dis_dEN, original_data,method='mask'):
+	xx_m = np.copy(xx)
+	yy_m = np.copy(yy)
+	original_data_m = np.copy(original_data)
 	for i in range(len(ra_dis_dEN)):
 		if abs(ra_dis_dEN[i])>fit_max or  abs(dec_dis_dEN[i])>fit_max:
 			continue
 		index_ra = int((ra_dis_dEN[i] + fit_max - spacing/2)/spacing)
 		index_dec = int((dec_dis_dEN[i] + fit_max - spacing/2)/spacing)
-		sf = 8 #smooth factor
-		original_data[index_ra-1:index_ra+2,index_dec-1:index_dec+2] = np.mean(original_data[max(index_ra-sf,0):index_ra+sf+1,max(index_dec-sf,0):index_dec+sf+1])*0.9
-		masked_data = original_data
-		#print original_data[index_ra,index_dec] - a
 
-	return masked_data
+		if method == 'mask':
+			xx_m[index_ra-1:index_ra+2,index_dec-1:index_dec+2], yy_m[index_ra-1:index_ra+2,index_dec-1:index_dec+2] = np.NaN, np.NaN
+			original_data_m[index_ra-1:index_ra+2,index_dec-1:index_dec+2] = np.NaN
+		elif method == 'smooth':
+			sf = 8 #smooth factor
+			original_data_m[index_ra-1:index_ra+2,index_dec-1:index_dec+2] = np.mean(original_data[max(index_ra-sf,0):index_ra+sf+1,max(index_dec-sf,0):index_dec+sf+1])
+		else:
+			raise KeyError(str(method)+' is not a valid argument!')
 
-def fit(bin_stats):
-	x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-	y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-	xx, yy = np.meshgrid(x, y)
-	#print xx.shape,bin_stats.shape
+	return xx_m, yy_m, original_data_m
 
+def fit(bin_stats,xx,yy):
 	for i in range(len(x)):
 		for j in range(len(y)):
-			#print i,j
 			if sqrt(x[i]**2+y[j]**2)<fit_min or sqrt(x[i]**2+y[j]**2)>fit_max:
-				xx[i,j],yy[i,j],bin_stats[i,j]=  np.NaN,np.NaN,np.NaN
+				xx[i,j],yy[i,j],bin_stats[i,j] =  np.NaN,np.NaN,np.NaN
 	xx_ravel=xx.ravel()[~np.isnan(xx.ravel())]
 	yy_ravel=yy.ravel()[~np.isnan(yy.ravel())]
 	bin_stats_ravel=bin_stats.ravel()[~np.isnan(bin_stats.ravel())]
@@ -44,7 +46,7 @@ def fit(bin_stats):
 	n = -2
 	PA = 1.2/4*pi
 	e = 0.751
-	H = 2800.
+	H = 100.
 	C = -0.2
 	initial_guess = [n, PA, e, H, C]
 
@@ -53,7 +55,6 @@ def fit(bin_stats):
 	bounds = [lower, upper]
 
 	pred_params, uncert_cov = curve_fit(func, (xx_ravel, yy_ravel), bin_stats_ravel, p0=initial_guess, bounds=bounds, method='trf')
-	#pred_params, uncert_cov = curve_fit(func_gaussian, (xx_ravel, yy_ravel), bin_stats_ravel,p0=initial_guess,bounds=bounds,method='trf')
 
 	perr = np.sqrt(np.diag(uncert_cov))
 	err =err_func((xx_ravel, yy_ravel), bin_stats_ravel ,pred_params[0],pred_params[1],pred_params[2],pred_params[3],pred_params[4])
@@ -97,10 +98,16 @@ dis_dec = np.array((dec-M87[1]) /180.*pi*DIS) # in kpc
 #===============data===================
 bin_ra = np.arange(-fit_max,fit_max+.1,spacing)
 bin_dec = np.arange(-fit_max,fit_max+.1,spacing)
+x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
+y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
+xx, yy = np.meshgrid(x, y)
+
 ret = stats_2d(dis_ra,dis_dec,None,'count',bins=[bin_ra,bin_dec])
-values = mask(ra_dis_dEN, dec_dis_dEN, ret.statistic/(spacing**2))  #2D statistic
-#values = ret.statistic/(spacing**2)
+values = ret.statistic/(spacing**2)
 values[np.isnan(values)]=0.0
+
+#===========mask dE,N regions=============================
+xx_m, yy_m, values_m = mask(xx, yy, ra_dis_dEN, dec_dis_dEN, values,method='mask')  
 
 #==========plot data======================================
 plt.hist2d(dis_ra,dis_dec,bins=[bin_ra,bin_dec])
@@ -109,20 +116,16 @@ plt.show()
 
 #======fit data======
 print 'fitting function: I = H*np.sqrt(x2**2+(y2/e)**2)**n + C'
-pred_params = fit(values)
+pred_params = fit(values_m,xx_m,yy_m)
 print 'Parameters 2D fit [n,PA,e,H,C]:',pred_params
 
-#======================simulated data=======================
-x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
-xx, yy = np.meshgrid(x, y)
+#==============plot fit result (residue)=======================
 xx[xx==0] = 0.001
 yy[yy==0] = 0.001
 
-#=================plot residual==============================
 func_value = func((xx,yy),pred_params[0],pred_params[1],pred_params[2],pred_params[3],pred_params[4])
 
-residual = func_value - values 
+residual = func_value - values
 for i in range(len(x)):
 	for j in range(len(y)):
 		if sqrt(x[i]**2+y[j]**2)<fit_min or sqrt(x[i]**2+y[j]**2)>fit_max:
