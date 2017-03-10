@@ -10,6 +10,7 @@ from func import *
 spacing = 4
 fit_min =15
 fit_max = 210
+np.set_printoptions(precision=2)
 
 def mask(ra_dis_dEN, dec_dis_dEN, original_data):
 	for i in range(len(ra_dis_dEN)):
@@ -18,8 +19,7 @@ def mask(ra_dis_dEN, dec_dis_dEN, original_data):
 		index_ra = int((ra_dis_dEN[i] + fit_max - spacing/2)/spacing)
 		index_dec = int((dec_dis_dEN[i] + fit_max - spacing/2)/spacing)
 		sf = 8 #smooth factor
-		a = original_data[index_ra,index_dec]
-		original_data[index_ra-2:index_ra+3,index_dec-2:index_dec+3] = np.mean(original_data[index_ra-sf:index_ra+sf+1,index_dec-sf:index_dec+sf+1])*0.9
+		original_data[index_ra-1:index_ra+2,index_dec-1:index_dec+2] = np.mean(original_data[max(index_ra-sf,0):index_ra+sf+1,max(index_dec-sf,0):index_dec+sf+1])*0.9
 		masked_data = original_data
 		#print original_data[index_ra,index_dec] - a
 
@@ -108,13 +108,16 @@ plt.colorbar()
 plt.show()
 
 #======fit data======
+print 'fitting function: I = H*np.sqrt(x2**2+(y2/e)**2)**n + C'
 pred_params = fit(values)
-print pred_params
+print 'Parameters 2D fit [n,PA,e,H,C]:',pred_params
 
 #======================simulated data=======================
 x = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
 y = np.arange(-fit_max+spacing/2.,fit_max-spacing/2.+0.1,spacing)
 xx, yy = np.meshgrid(x, y)
+xx[xx==0] = 0.001
+yy[yy==0] = 0.001
 
 #=================plot residual==============================
 func_value = func((xx,yy),pred_params[0],pred_params[1],pred_params[2],pred_params[3],pred_params[4])
