@@ -5,6 +5,7 @@ from func import *
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+from gc_stat import *
 
 DIS = 17.21*1000 #kpc
 M87 = (187.70583, 12.39111)
@@ -15,23 +16,26 @@ logfile.write('r, gc_count, gc_count_b, gc_count_r, gc_expected, C \n\n')
 cat_ucd = Table.read('NGVS.pilot.92ucds.fits')  #catalog of UCDs
 cat_gc = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat_gc = cat_gc[cat_gc['p_gc']>0.95]   #masked (p_gc>0.95) catalog of GCs
+#cat_gc = cat_gc[cat_gc['gmag']<24.5] 
 ra_gc = np.array(cat_gc['ra'])      #RA of GCs
 dec_gc = np.array(cat_gc['dec'])  #Dec of GCs
-#cat_gc = cat_gc[cat_gc['gmag']<24] 
 
-cat_gc_b = cat_gc[cat_gc['gmag'] - cat_gc['imag']<0.89] 
-ra_gc_b = np.array(cat_gc_b['ra'])      #RA of GCs
-dec_gc_b = np.array(cat_gc_b['dec'])  #Dec of GCs
 
-cat_gc_r = cat_gc[cat_gc['gmag'] - cat_gc['imag']>0.89] 
-ra_gc_r = np.array(cat_gc_r['ra'])      #RA of GCs
-dec_gc_r = np.array(cat_gc_r['dec'])  #Dec of GCs
+cat_gc_b = cat_gc[cat_gc['gi0']<0.8] 
+ra_gc_b = np.array(cat_gc_b['ra'])      
+dec_gc_b = np.array(cat_gc_b['dec'])  
 
-fit_min = 15
-fit_max = 230
+cat_gc_r = cat_gc[cat_gc['gi0']>0.8] 
+ra_gc_r = np.array(cat_gc_r['ra'])     
+dec_gc_r = np.array(cat_gc_r['dec'])  
+
+fit_min = 25
+fit_max = 210
 step = 0.5  # in kpc
-start = 0.5
-radius = np.arange(start, start+4, step)   # in kpc  from 0.25 to 3.75 step 0.5
+start = 0.45
+gc_count_total = 0
+
+radius = np.arange(start, start+4, step)   # in kpc 
 str_radius = str(radius).strip('[]').split()  #for table name
 tab_names = ['ID','ra','dec','DIS','r_h','g-i']
 for str_r in str_radius:
@@ -64,19 +68,19 @@ dis_ucd_gc_list_r = np.array([])
 def bkg_2d(ra,dec):
 	dis_ra = (ra - M87[0])/180.*pi*DIS  
 	dis_dec = (dec - M87[1])/180.*pi*DIS  
-	n = -1.5716456
-	PA =  0.658513273
-	e = 0.740146285
-	H = 85.1889069
-	Const = -0.0123046213
+	n = -1.49
+	PA =  0.716
+	e = 0.69
+	H = 63.7
+	Const = -0.0133
 
 	exp_density = func((dis_ra,dis_dec), n, PA, e, H, Const)
-	bkg_unif = 0
+	bkg_unif = func((230,230), n, PA, e, H, Const)
 	return exp_density,bkg_unif
 
 def bkg_1d(dis_M87_ucd,slope, intercept):
 	exp_density = exp(intercept)*dis_M87_ucd**(slope)  # expected density (assume uniform in the vicinity of a UCD)
-	bkg_unif = exp(intercept)*270**(slope)    # uniform bakground in the field (possibly non-GC objects)	
+	bkg_unif = exp(intercept)*230**(slope)    # uniform bakground in the field (possibly non-GC objects)	
 	return exp_density,bkg_unif
 
 def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
@@ -93,8 +97,7 @@ def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
 	gc_expected = (exp_density-bkg_unif)*area
 	gc_count = len(dis_ucd_gc_mask)
 
-	gc_count_cor =gc_count -bkg_unif*area
-
+	gc_count_cor = gc_count - bkg_unif*area
 	return gc_count, gc_count_cor, gc_expected, dis_ucd_gc_mask
 
 def C_ave(gc_counts, dis_ucd_gc_list, C, mask):
@@ -109,7 +112,7 @@ def C_ave(gc_counts, dis_ucd_gc_list, C, mask):
 	gc_counts = gc_counts.reshape(len(gc_counts)/len(radius),len(radius)) 
 	gc_counts_mean = np.nanmean(gc_counts,0) 
 
-	#C = C[mask]
+	#C = C[mask]  #select specific UCDs 
 	C_mean = np.array([])
 	C_std = np.array([])
 	for i in range(len(radius)):
@@ -121,7 +124,6 @@ def C_ave(gc_counts, dis_ucd_gc_list, C, mask):
 		C_std = np.append(C_std,std)  #robust averge C signal over all UCDs
 	C_max = np.max(C,0)  #max
 	C_min = np.min(C,0)    #min
-
 	return C_mean,C_std,dis_ucd_gc_list_mean,gc_counts_mean
 
 def mean_dis(dis_ucd_gc_list, gc_count, dis_ucd_gc_mask):
@@ -132,9 +134,10 @@ def mean_dis(dis_ucd_gc_list, gc_count, dis_ucd_gc_mask):
 		dis_ucd_gc_list = np.append(dis_ucd_gc_list, np.NaN)
 	else:
 		dis_ucd_gc_list = np.append(dis_ucd_gc_list, np.mean(dis_ucd_gc_mask))	
-
 	return dis_ucd_gc_list
 
+#cat_ucd = cat_ucd[cat_ucd['MAGCOR_AP16'][:,3]>19.68]
+#cat_ucd = cat_ucd[cat_ucd['RH']>20]
 for i in range(len(cat_ucd)): 
 	ID = cat_ucd[i]['INDEX']
 	ra_ucd = cat_ucd[i]['RA']
@@ -146,12 +149,21 @@ for i in range(len(cat_ucd)):
 
 	if dis_M87_ucd>fit_max or dis_M87_ucd<fit_min:
 		continue
-
-	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.89827756001, intercept = 5.26216641247)
-	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.72152885995, intercept = 4.2557020942)
-	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.0779945286, intercept = 4.79429803534)
-
-	#exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)                         
+	'''
+	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.97368480601, intercept =  5.61682636682)
+	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.76335828583, intercept = 4.39731813005)
+	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.57709580758, intercept = 6.80813324092)
+	'''
+	'''
+	r_maj = np.exp(np.arange(0.955,7.,0.05))
+	r_maj = r_maj[r_maj<500] 
+	exp_density,bkg_unif = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-1.8950965033,slope=5.93299173158)
+	exp_density_b,bkg_unif_b = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-1.65809098037,slope=4.54655907164)
+	exp_density_r,bkg_unif_r = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-2.46021720566,slope=7.08592201942)
+	'''
+	exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)     
+	exp_density_b,bkg_unif_b = bkg_2d(ra_ucd,dec_ucd) 
+	exp_density_r,bkg_unif_r = bkg_2d(ra_ucd,dec_ucd)                     
 
 	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g_i]  #prepare for the info table
 	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
@@ -167,6 +179,7 @@ for i in range(len(cat_ucd)):
 		gc_count, gc_count_cor, gc_expected, dis_ucd_gc_mask = gc_stat(dis_ucd_gc, exp_density, bkg_unif)
 		gc_count_b, gc_count_cor_b, gc_expected_b, dis_ucd_gc_mask_b = gc_stat(dis_ucd_gc_b, exp_density_b, bkg_unif_b)
 		gc_count_r, gc_count_cor_r, gc_expected_r, dis_ucd_gc_mask_r = gc_stat(dis_ucd_gc_r, exp_density_r, bkg_unif_r)
+		gc_count_total += gc_count
 
 		#Clustering Signal
 		C = np.append(C,gc_count_cor/gc_expected) 
@@ -199,16 +212,17 @@ for i in range(len(cat_ucd)):
 logfile.write('=================C clustering signal======================\n')
 
 gc_counts = gc_counts.reshape(len(gc_counts)/len(radius),len(radius)) 
-mask = gc_counts[:,0] +gc_counts[:,1] >0
+mask = gc_counts[:,0] >0
 gc_counts = gc_counts.ravel()
 
 C_mean, C_std, dis_ucd_gc_list_mean, gc_counts_mean = C_ave(gc_counts, dis_ucd_gc_list, C, mask)
 C_mean_b, C_std_b, dis_ucd_gc_list_mean_b, gc_counts_mean_b = C_ave(gc_counts_b, dis_ucd_gc_list_b, C_b, mask)
 C_mean_r, C_std_r, dis_ucd_gc_list_mean_r, gc_counts_mean_r = C_ave(gc_counts_r, dis_ucd_gc_list_r, C_r, mask)
 
+#==============print statistics on the screen=================
 np.set_printoptions(precision=2)
 no_ucd = C.shape[0]/len(radius)
-print 'Number of UCDs:', no_ucd
+print 'Number of UCDs:', no_ucd,', Number of GCs:',gc_count_total
 print 'Radius bins:',radius
 print '==============================='
 print 'Mean DIS:',dis_ucd_gc_list_mean
@@ -229,7 +243,7 @@ print 'Red Std:',C_std_r/sqrt(no_ucd)
 #print 'Min:', C_min
 ucd_data.write('clustering.fits',overwrite=True)
 
-#plot the final figure
+#============plot the final figure=================================================
 fig, ax = plt.subplots()
 ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(no_ucd),fmt='ko',label = 'All GCs')
 ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
@@ -243,8 +257,9 @@ ax.set_xlim(0.25,4.5)
 ax.set_ylim(0,int(C_mean.max())+2)
 ax.legend(numpoints=1,frameon=False,loc='upper right')
 plt.title('step: '+str(step)+', fitting max: '+str(fit_max)+', start: '+str(start)+'kpc')
-#plt.savefig('./pics/clustering_pics/clustering.bluered.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
-plt.savefig('clustering.bluered.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
-#plt.savefig('clustering.bluered.with.comp.1kpc'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
+#plt.savefig('pics/clustering_pics/clustering.bluered.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
+#plt.savefig('pics/clustering.bluered.2D.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
+#plt.savefig('pics/clustering.bluered.with.comp.1kpc'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
 
+plt.show()
 logfile.close()
