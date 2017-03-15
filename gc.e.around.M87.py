@@ -3,7 +3,7 @@ from math import *
 import matplotlib.pyplot as plt 
 import scipy.stats
 import numpy as np
-from gc_stat import elliptical_stat
+from gc_stat import *
 np.set_printoptions(precision=2)
 
 cat = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
@@ -13,21 +13,6 @@ cat_ucd = Table.read('NGVS.pilot.92ucds.fits')
 M87 = (187.70583, 12.39111)
 DIS = 17.21*1000 # in Kpc (luminosity distance from NED)
 radius_max = 500. #kpc   max radius for bin statistics (gc and ucd)
-
-def gc_fitting(gc_density, bin_mean_gc, fit_min, fit_max):
-
-	gc_density = gc_density[~np.isnan(bin_mean_gc)]
-	bin_mean_gc = bin_mean_gc[~np.isnan(bin_mean_gc)]
-
-	gc_density_fit = gc_density[bin_mean_gc>fit_min]
-	bin_mean_gc_fit = bin_mean_gc[bin_mean_gc>fit_min]
-
-	gc_density_fit = gc_density_fit[bin_mean_gc_fit<fit_max]
-	bin_mean_gc_fit = bin_mean_gc_fit[bin_mean_gc_fit<fit_max]
-
-	slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(np.log(bin_mean_gc_fit),np.log(gc_density_fit))
-
-	return slope, intercept, r_value
 
 '''================Bin Statistics for gc====================='''
 r_maj = np.exp(np.arange(0.955,7.,0.05))
