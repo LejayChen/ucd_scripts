@@ -16,7 +16,7 @@ def load_ucd_dEN_cat():
 	dec_dEN_list = cat_dEN['DEC']
 	return ra_ucd_list, dec_ucd_list, ra_dEN_list, dec_dEN_list
 
-def mask(bins_gc, gc_counts, dis_list, theta_list):
+def mask_c(bins_gc, gc_counts, dis_list, theta_list):
 
 	def slice_list(dis_list,theta_list,i):
 		theta_list_slice = theta_list[dis_list>float(bins_gc[i])]
@@ -31,7 +31,7 @@ def mask(bins_gc, gc_counts, dis_list, theta_list):
 	theta_ucd_list = np.arctan((ra_ucd_list - M87[0]) / (dec_ucd_list - M87[1]))
 	theta_dEN_list = np.arctan((ra_dEN_list - M87[0]) / (dec_dEN_list - M87[1]))	
 
-	gc_densities = []
+	gc_counts_cor = []
 	areas = []  
 	for i in range(len(bins_gc[:-1])):
 		theta_list_slice = slice_list(dis_list, theta_list,i)
@@ -48,13 +48,14 @@ def mask(bins_gc, gc_counts, dis_list, theta_list):
 		for theta in theta_dEN_list_slice:
 			theta_list_slice_bydEN = theta_list_slice[theta_list_slice<theta+0.05*pi]
 			theta_list_slice_bydEN = theta_list_slice_bydEN[theta_list_slice_bydEN>theta-0.05*pi]
+			gc_counts[i] = gc_counts[i] - len(theta_list_slice_bydEN)
 
 		area = (bins_gc[i+1]**2 - bins_gc[i]**2)*pi
 		area = area*(1- 0.1/2*(len(theta_list_slice_byucd)+len(theta_list_slice_bydEN)))
 		areas.append(area)
-		gc_densities.append(gc_counts[i]/area)
+		gc_counts_cor.append(gc_counts[i])
 
-	return np.array(gc_densities),np.array(areas)
+	return np.array(gc_counts_cor),np.array(areas)
 	
 def gc_fitting(gc_density, bin_mean_gc, fit_min, fit_max):
 
@@ -71,7 +72,7 @@ def gc_fitting(gc_density, bin_mean_gc, fit_min, fit_max):
 
 	return slope, intercept, r_value
 
-def gc_density_stat(cat_GC):
+def gc_density_stat(cat_GC, mask='on'):
 	dis_list = []
 	theta_list = []
 	for i in range(len(cat_GC)):
@@ -87,11 +88,19 @@ def gc_density_stat(cat_GC):
 	count_gc_binned = scipy.stats.binned_statistic(dis_list,dis_list,statistic='count',bins=bins_gc,range=(0.,radius_max))
 	bin_mean_gc = scipy.stats.binned_statistic(dis_list,dis_list,statistic='mean',bins=bins_gc,range=(0.,radius_max))[0] #mean value for distance in each bin
 
-	gc_counts = np.arragy(count_gc_binned[0],dtype='f8')
+	gc_counts = np.array(count_gc_binned[0],dtype='f8')
+	if mask=='on': 
+		gc_counts, areas = mask_c(bins_gc, gc_counts, dis_list, theta_list) 
+	elif mask=='off':
+		areas = np.array([])
+		for i in range(len(bins_gc[:-1])):
+			areas = np.append(areas, (bins_gc[i+1]**2 - bins_gc[i]**2)*pi)
+	else:
+		raise KeyError('Argument mask only have options "on" and "off" ')
+
+	gc_density = gc_counts/areas
 	gc_counts_err = np.sqrt(gc_counts)
-		
-	gc_density, areas = mask(bins_gc, gc_counts, dis_list, theta_list)
-	gc_density_err = gc_counts_err/areas
+	gc_density_err = gc_counts_err/areas	
 
 	return gc_density, gc_density_err,bin_mean_gc
 
@@ -112,13 +121,20 @@ def  which_ring(ra,dec,r_maj, PA=149./180*pi, e=0.5):
 				return j-1
 	return None
 
-def mask_e(r_maj, gc_counts, areas, gc_ra_list, gc_dec_list, mask_r=2):
+def mask_e(r_maj, gc_counts, areas, gc_ra_list, gc_dec_list, mask_r=5.0):
 
-	mask_r  =2.0 #kpc
-	def count_gc_mask_r(ra,dec,gc_ra_list, gc_dec_list):
-		mask = np.sqrt((gc_ra_list-ra)**2 + (gc_dec_list)**2)/180.*pi*DIS<mask_r
+	def count_gc_mask_r(ra,dec,gc_ra_list, gc_dec_list, index):
+		mask = np.sqrt((gc_ra_list - ra)**2 + (gc_dec_list - dec)**2)/180.*pi*DIS<mask_r
 		gc_ra_list = gc_ra_list[mask]
-		return len(gc_ra_list)
+		num_gc_out = num_gc_in = 0
+		for i in range(len(gc_ra_list)):
+			ra_gc = gc_ra_list[i]
+			dec_gc = gc_dec_list[i]
+			if which_ring(ra_gc, dec_gc, r_maj) > index or which_ring(ra_gc, dec_gc, r_maj)==None:  
+				num_gc_out += 1
+			elif which_ring(ra_gc, dec_gc, r_maj) <index or which_ring(ra_gc, dec_gc, r_maj)==None:
+				num_gc_in +=1
+		return len(gc_ra_list), num_gc_in, num_gc_out
 
 	ra_ucd_list, dec_ucd_list, ra_dEN_list, dec_dEN_list = load_ucd_dEN_cat()
 	for i in range(len(ra_ucd_list)):
@@ -127,12 +143,16 @@ def mask_e(r_maj, gc_counts, areas, gc_ra_list, gc_dec_list, mask_r=2):
 		index = which_ring(ra,dec,r_maj)
 		if index == None: continue
 
-		areas[index] = areas[index] - pi*mask_r**2
-		gc_counts[index] = gc_counts[index] - count_gc_mask_r(ra,dec,np.copy(gc_ra_list), np.copy(gc_dec_list))
+		gc_mask_count, num_gc_in, num_gc_out = count_gc_mask_r(ra,dec,np.copy(gc_ra_list), np.copy(gc_dec_list),index)
+		if gc_mask_count>0:
+			areas[index] = areas[index] - (pi*mask_r**2)*0.5*(gc_mask_count - num_gc_in - num_gc_out)/float(gc_mask_count)
+			areas[index+1] = areas[index+1] - (pi*mask_r**2)*0.5*num_gc_out/float(gc_mask_count)
+			areas[index-1] = areas[index-1] - (pi*mask_r**2)*0.5*num_gc_in/float(gc_mask_count)
 
+		gc_counts[index] = gc_counts[index] - (gc_mask_count - num_gc_in - num_gc_out)
 	return np.array(gc_counts),np.array(areas)
 
-def elliptical_stat(cat, r_maj, PA=149./180*pi,e=0.5):
+def elliptical_stat(cat, r_maj, PA=149./180*pi,e=0.5, mask='on'):
 	r_min = e*r_maj
 	gc_counts = np.zeros(len(r_maj) -1) 
 	gc_ra_list = cat['ra']
@@ -156,9 +176,10 @@ def elliptical_stat(cat, r_maj, PA=149./180*pi,e=0.5):
 	areas = np.array([],dtype='f4')
 	for i in range(len(r_maj[:-1])):
 		areas = np.append(areas, pi*e*(r_maj[i+1]**2-r_maj[i]**2))
-	gc_counts, areas = mask_e(r_maj, gc_counts, areas, gc_ra_list, gc_dec_list)
-	gc_density = gc_counts/areas
 
+	if mask=='on': gc_counts, areas = mask_e(r_maj, gc_counts, areas, gc_ra_list, gc_dec_list)
+
+	gc_density = gc_counts/areas
 	gc_counts_err = np.sqrt(gc_counts)
 	gc_density_err = gc_counts_err/areas
 
