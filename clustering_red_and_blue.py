@@ -1,11 +1,12 @@
 from astropy.table import *
 from math import *
-from robust_mean import *
-from func import *
+from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime
+
 from gc_stat import *
+from robust_mean import *
+from func import *
 
 DIS = 17.21*1000 #kpc
 M87 = (187.70583, 12.39111)
@@ -13,13 +14,13 @@ logfile = open('clustering_red_and_blue.log','w')
 logfile.write(str(datetime.now())+'\n\n')
 logfile.write('r, gc_count, gc_count_b, gc_count_r, gc_expected, C \n\n')
 
+cat_dEN = Table.read('pp.gal.nuc2.s.master.new.fits')
 cat_ucd = Table.read('NGVS.pilot.92ucds.fits')  #catalog of UCDs
 cat_gc = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat_gc = cat_gc[cat_gc['p_gc']>0.95]   #masked (p_gc>0.95) catalog of GCs
 #cat_gc = cat_gc[cat_gc['gmag']<24.5] 
 ra_gc = np.array(cat_gc['ra'])      #RA of GCs
 dec_gc = np.array(cat_gc['dec'])  #Dec of GCs
-
 
 cat_gc_b = cat_gc[cat_gc['gi0']<0.8] 
 ra_gc_b = np.array(cat_gc_b['ra'])      
@@ -31,13 +32,14 @@ dec_gc_r = np.array(cat_gc_r['dec'])
 
 fit_min = 25
 fit_max = 210
+bkg_level_radius  =230
 step = 0.5  # in kpc
-start = 0.45
+start = 0.5
 gc_count_total = 0
 
 radius = np.arange(start, start+4, step)   # in kpc 
 str_radius = str(radius).strip('[]').split()  #for table name
-tab_names = ['ID','ra','dec','DIS','r_h','g-i']
+tab_names = ['ID','ra','dec','DIS','r_h','g']
 for str_r in str_radius:
 	tab_names.append(str_r+'_count')
 	tab_names.append(str_r+'_count_cor')
@@ -51,16 +53,12 @@ for str_r in str_radius:
 tab_dtype = ['a8','f8','f8','f4','f4','f4']+['i2','f2','f4']*len(radius)*3
 ucd_data = Table(names=(tab_names),dtype=(tab_dtype))
 
-gc_count_total = 0
-
 C = np.array([])   # C=clustering signal     (measured/bkg)
 gc_counts = np.array([])  # count of GCs 
 dis_ucd_gc_list = np.array([])  # list of each gc's distance to UCD
-
 C_b = np.array([])   
 gc_counts_b = np.array([])  
 dis_ucd_gc_list_b = np.array([])  
-
 C_r = np.array([])   
 gc_counts_r = np.array([])  
 dis_ucd_gc_list_r = np.array([]) 
@@ -68,25 +66,29 @@ dis_ucd_gc_list_r = np.array([])
 def bkg_2d(ra,dec):
 	dis_ra = (ra - M87[0])/180.*pi*DIS  
 	dis_dec = (dec - M87[1])/180.*pi*DIS  
-	n = -1.49
-	PA =  0.716
-	e = 0.69
-	H = 63.7
-	Const = -0.0133
+	n = -1.54
+	PA =  0.736
+	e = 0.692
+	H = 78
+	Const = -0.0128
 
 	exp_density = func((dis_ra,dis_dec), n, PA, e, H, Const)
-	bkg_unif = func((230,230), n, PA, e, H, Const)
+	bkg_unif = func((bkg_level_radius,bkg_level_radius), n, PA, e, H, Const)
 	return exp_density,bkg_unif
 
 def bkg_1d(dis_M87_ucd,slope, intercept):
 	exp_density = exp(intercept)*dis_M87_ucd**(slope)  # expected density (assume uniform in the vicinity of a UCD)
-	bkg_unif = exp(intercept)*230**(slope)    # uniform bakground in the field (possibly non-GC objects)	
+	bkg_unif = exp(intercept)*bkg_level_radius**(slope)    # uniform bakground in the field (possibly non-GC objects)	
 	return exp_density,bkg_unif
 
+def bkg_e(ra,dec,r_maj,intercept,slope):
+	exp_density = exp(intercept)*cal_r_maj(ra,dec,ell=0.5)**(slope) 
+	bkg_unif = exp(intercept)*bkg_level_radius**(slope)   	
+	return exp_density, bkg_unif
+
 def gc_stat(dis_ucd_gc, exp_density, bkg_unif):
-	'''
-	count GC around each UCD
-	'''
+	'''count GC around each UCD in differently sized bins'''
+
 	dis_ucd_gc_mask = np.array([])
 	#mask out the area for counting  (ring shaped mask from r to r+step)
 	dis_ucd_gc_mask = dis_ucd_gc[dis_ucd_gc<(r+step)] #outer bound
@@ -127,45 +129,81 @@ def C_ave(gc_counts, dis_ucd_gc_list, C, mask):
 	return C_mean,C_std,dis_ucd_gc_list_mean,gc_counts_mean
 
 def mean_dis(dis_ucd_gc_list, gc_count, dis_ucd_gc_mask):
-	'''
-	GC mean distance to host UCD for individual UCD
-	'''
+	'''GC mean distance to host UCD for individual UCD'''
+
 	if gc_count == 0:
 		dis_ucd_gc_list = np.append(dis_ucd_gc_list, np.NaN)
 	else:
 		dis_ucd_gc_list = np.append(dis_ucd_gc_list, np.mean(dis_ucd_gc_mask))	
 	return dis_ucd_gc_list
 
-#cat_ucd = cat_ucd[cat_ucd['MAGCOR_AP16'][:,3]>19.68]
-#cat_ucd = cat_ucd[cat_ucd['RH']>20]
-for i in range(len(cat_ucd)): 
-	ID = cat_ucd[i]['INDEX']
-	ra_ucd = cat_ucd[i]['RA']
-	dec_ucd = cat_ucd[i]['DEC']
-	r_h = cat_ucd[i]['RH']
-	g_i = cat_ucd[i]['MAGCOR_AP8'][1] - cat_ucd[i]['MAGCOR_AP8'][3] 
+def sample_selection(cat_ucd,cat_dEN, method='sb'):
+	names = ['class','ID','ra','dec','sb','r_h','g','dis']
+	dtypes = ['a4','i4','f4','f4','f4','f4','f4','f4']
+	cat_ucd_dEN = Table(names=(names),dtype=(dtypes))
+
+	for i in range(len(cat_ucd)): 
+		classification = 'UCD'
+		ID = str(cat_ucd[i]['INDEX'])
+		ra_ucd = cat_ucd[i]['RA']
+		dec_ucd = cat_ucd[i]['DEC']
+		sb = ucd_sb(cat_ucd[i])
+		r_h = cat_ucd[i]['RH']
+		g = cat_ucd[i]['MAGCOR_AP16'][1] 
+		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
+
+		cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+
+	for i in range(len(cat_dEN)): 
+		classification = 'dEN'
+		ID = str(cat_dEN[i]['INDEX'])
+		ra_ucd = cat_dEN[i]['RA']
+		dec_ucd = cat_dEN[i]['DEC']
+		sb = ucd_sb(cat_dEN[i])
+		r_h = cat_dEN[i]['RH']
+		g = cat_dEN[i]['MAGCOR_AP16'][1] 
+		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
+
+		if method == 'sb'and sb>26: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+
+	if method =='mag':
+		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<20.5]
+	if method == 'rh':
+		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['r_h']>15]
+
+	cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['dis']>fit_min]
+	cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['dis']<fit_max]
+
+	return cat_ucd_dEN
+
+cat_ucd_dEN = sample_selection(cat_ucd,cat_dEN,method='sb')
+for i in range(len(cat_ucd_dEN)): 
+	ID = cat_ucd_dEN[i]['ID']
+	ra_ucd = cat_ucd_dEN[i]['ra']
+	dec_ucd = cat_ucd_dEN[i]['dec']
+	r_h = cat_ucd_dEN[i]['r_h']
+	g = cat_ucd_dEN[i]['g']
 
 	dis_M87_ucd = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
-
-	if dis_M87_ucd>fit_max or dis_M87_ucd<fit_min:
-		continue
-	'''
+	
 	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.97368480601, intercept =  5.61682636682)
 	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.76335828583, intercept = 4.39731813005)
 	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.57709580758, intercept = 6.80813324092)
-	'''
+	
 	'''
 	r_maj = np.exp(np.arange(0.955,7.,0.05))
-	r_maj = r_maj[r_maj<500] 
-	exp_density,bkg_unif = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-1.8950965033,slope=5.93299173158)
-	exp_density_b,bkg_unif_b = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-1.65809098037,slope=4.54655907164)
-	exp_density_r,bkg_unif_r = bkg_e(ra_ucd,dec_ucd,r_maj,intercept=-2.46021720566,slope=7.08592201942)
+	r_maj = r_maj[r_maj<500.] 
+	exp_density,bkg_unif = bkg_e(ra_ucd, dec_ucd, r_maj, slope=-2.21808651239,intercept=7.49042578166)
+	exp_density_b,bkg_unif_b = bkg_e(ra_ucd, dec_ucd, r_maj,slope=-1.65809098037,intercept=4.54655907164)
+	exp_density_r,bkg_unif_r = bkg_e(ra_ucd, dec_ucd, r_maj,slope=-2.46021720566,intercept=7.08592201942)
+	'''
 	'''
 	exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)     
 	exp_density_b,bkg_unif_b = bkg_2d(ra_ucd,dec_ucd) 
 	exp_density_r,bkg_unif_r = bkg_2d(ra_ucd,dec_ucd)                     
+	'''	
 
-	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g_i]  #prepare for the info table
+	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2),r_h, g]  #prepare for the info table
 	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 	dis_ucd_gc_b = np.sqrt((ra_gc_b-ra_ucd)**2+(dec_gc_b-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 	dis_ucd_gc_r = np.sqrt((ra_gc_r-ra_ucd)**2+(dec_gc_r-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
@@ -221,9 +259,11 @@ C_mean_r, C_std_r, dis_ucd_gc_list_mean_r, gc_counts_mean_r = C_ave(gc_counts_r,
 
 #==============print statistics on the screen=================
 np.set_printoptions(precision=2)
-no_ucd = C.shape[0]/len(radius)
-print 'Number of UCDs:', no_ucd,', Number of GCs:',gc_count_total
-print 'Radius bins:',radius
+no_ucd = len(cat_ucd_dEN[cat_ucd_dEN['class']=='UCD'])
+no_dEN= len(cat_ucd_dEN[cat_ucd_dEN['class']=='dEN'])
+print 'Number of UCDs:', no_ucd,'Number of dE,Ns:', no_dEN,', Number of GCs:',gc_count_total
+print 'log saved in clustering_red_and_blue.log'
+print 'Radius bins:',radius,'\n'
 print '==============================='
 print 'Mean DIS:',dis_ucd_gc_list_mean
 print 'Mean C:',C_mean
