@@ -31,12 +31,15 @@ def load_ucd_dEN_cat():
 def mask_c(bins_gc, gc_counts, dis_list, theta_list):
 	'''mask the UCDs and dENs in circle shape ring stats'''
 
-	def slice_list(dis_list,theta_list,i):
+	def dis_slice_list(dis_list,theta_list,index):
 		'''slice the UCD and dEN list between certain rings'''
-		theta_list_slice = theta_list[dis_list>float(bins_gc[i])]
-		dis_list_slice = dis_list[dis_list>float(bins_gc[i])]
-		theta_list_slice = theta_list_slice[dis_list_slice<float(bins_gc[i+1])]	
-		return theta_list_slice
+
+		theta_list_slice = theta_list[dis_list>bins_gc[index]]
+		dis_list_slice = dis_list[dis_list>bins_gc[index]]
+		theta_list_slice = theta_list_slice[dis_list_slice<bins_gc[index+1]]
+		dis_list_slice = dis_list_slice[dis_list_slice<bins_gc[index+1]]
+
+		return dis_list_slice, theta_list_slice
 
 	#load RA,DEC data from UCD and dE,N catalogs 
 	ra_ucd_list, dec_ucd_list, ra_dEN_list, dec_dEN_list = load_ucd_dEN_cat()
@@ -48,24 +51,39 @@ def mask_c(bins_gc, gc_counts, dis_list, theta_list):
 	gc_counts_cor = []
 	areas = []  
 	for i in range(len(bins_gc[:-1])):
-		theta_list_slice = slice_list(dis_list, theta_list,i)
-		theta_ucd_list_slice = slice_list(dis_ucd_list, theta_ucd_list,i)
-		theta_dEN_list_slice = slice_list(dis_dEN_list, theta_dEN_list,i)
+		print '=======',bins_gc[i],'============='
+		dis_list_slice, theta_list_slice = dis_slice_list(dis_list, theta_list,i)
+		dis_ucd_list_slice, theta_ucd_list_slice = dis_slice_list(dis_ucd_list, theta_ucd_list,i)
+		dis_dEN_list_slice, theta_dEN_list_slice = dis_slice_list(dis_dEN_list, theta_dEN_list,i)
 
 		theta_list_slice_byucd = []
 		theta_list_slice_bydEN = []
-		for theta in theta_ucd_list_slice:
-			theta_list_slice_byucd = theta_list_slice[theta_list_slice<theta+0.05*pi]
-			theta_list_slice_byucd = theta_list_slice_byucd[theta_list_slice_byucd>theta-0.05*pi]
-			gc_counts[i] = gc_counts[i] - len(theta_list_slice_byucd)
+		for k in range(len(theta_ucd_list_slice)):
+			dis_list_slice_byucd = dis_list_slice[dis_list_slice < dis_ucd_list_slice[k] + 2]
+			theta_list_slice_byucd = theta_list_slice[dis_list_slice < dis_ucd_list_slice[k] + 2]
+			theta_list_slice_byucd = theta_list_slice_byucd[dis_list_slice_byucd > dis_ucd_list_slice[k] - 2]
+			
+			theta = theta_ucd_list_slice[k]
+			theta_list_slice_byucd = theta_list_slice_byucd[theta_list_slice_byucd<theta+0.01*pi]
+			theta_list_slice_byucd = theta_list_slice_byucd[theta_list_slice_byucd>theta-0.01*pi]
 
-		for theta in theta_dEN_list_slice:
-			theta_list_slice_bydEN = theta_list_slice[theta_list_slice<theta+0.05*pi]
-			theta_list_slice_bydEN = theta_list_slice_bydEN[theta_list_slice_bydEN>theta-0.05*pi]
-			gc_counts[i] = gc_counts[i] - len(theta_list_slice_bydEN)
+			gc_counts[i] = gc_counts[i] - len(theta_list_slice_byucd)
+			print 'GC cut by ucd',k+1,':', len(theta_list_slice_byucd)
+
+		for k in range(len(theta_dEN_list_slice)):
+			dis_list_slice_bydEN = dis_list_slice[dis_list_slice < dis_dEN_list_slice[k] + 4]
+			theta_list_slice_bydEN = theta_list_slice[dis_list_slice < dis_dEN_list_slice[k] + 4]
+			theta_list_slice_bydEN = theta_list_slice_bydEN[dis_list_slice_bydEN > dis_dEN_list_slice[k] - 4]		
+
+			theta = theta_dEN_list_slice[k]
+			theta_list_slice_bydEN = theta_list_slice_bydEN[theta_list_slice_bydEN<theta+0.01*pi]
+			theta_list_slice_bydEN = theta_list_slice_bydEN[theta_list_slice_bydEN>theta-0.01*pi]
+
+			gc_counts[i] = gc_counts[i] - len(theta_list_slice_bydEN)	
+			print 'GC cut by dEN',k+1,':', len(theta_list_slice_bydEN)		
 
 		area = (bins_gc[i+1]**2 - bins_gc[i]**2)*pi
-		area = area*(1- 0.1/2*(len(theta_list_slice_byucd)+len(theta_list_slice_bydEN)))
+		area = area*(1- 0.02/2*(len(theta_list_slice_byucd)+len(theta_list_slice_bydEN)))
 		areas.append(area)
 		gc_counts_cor.append(gc_counts[i])
 
@@ -105,7 +123,7 @@ def gc_density_stat(cat_GC, mask='on'):
 
 	gc_counts = np.array(count_gc_binned[0],dtype='f8')
 	if mask=='on': 
-		gc_counts, areas = mask_c(bins_gc, gc_counts, dis_list, theta_list) 
+		gc_counts, areas = mask_c(bins_gc, gc_counts, np.array(dis_list), np.array(theta_list)) 
 	elif mask=='off':
 		areas = np.array([])
 		for i in range(len(bins_gc[:-1])):
