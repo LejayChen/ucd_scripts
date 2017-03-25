@@ -14,16 +14,16 @@ fit_min = 25
 fit_max = 210
 bkg_level_radius  = 230
 step = 0.5  # in kpc
-start = 0.5
+start = 0.25
 radius = np.arange(start, start+4, step)   # in kpc 
-gc_count_total = 0
+gc_count_total = gc_count_total_b = gc_count_total_r = 0
 
 logfile = open('clustering_red_and_blue.log','w')
 logfile.write(str(datetime.now())+'\n\n')
 logfile.write('r, gc_count, gc_count_b, gc_count_r, gc_expected, C \n\n')
 
-cat_dEN = Table.read('pp.gal.nuc2.s.master.new.fits')
-cat_ucd = Table.read('NGVS.pilot.92ucds.fits')  #catalog of UCDs
+cat_dEN = Table.read('new.pp.gal.nuc2.s.master.new.fits')
+cat_ucd = Table.read('new.NGVS.pilot.92ucds.fits')  #catalog of UCDs
 cat_gc = Table.read('ngvs_pilot_xdclass1.0_g18.0-25.0.fits')
 cat_gc = cat_gc[cat_gc['p_gc']>0.95]   #masked (p_gc>0.95) catalog of GCs
 #cat_gc = cat_gc[cat_gc['gmag']<24.5] 
@@ -146,7 +146,7 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 		ID = str(cat_ucd[i]['INDEX'])
 		ra_ucd = cat_ucd[i]['RA']
 		dec_ucd = cat_ucd[i]['DEC']
-		sb = ucd_sb(cat_ucd[i])
+		sb = cat_ucd[i]['sb']
 		r_h = cat_ucd[i]['RH']
 		g = cat_ucd[i]['MAGCOR_AP16'][1] 
 		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
@@ -158,16 +158,15 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 		ID = str(cat_dEN[i]['INDEX'])
 		ra_ucd = cat_dEN[i]['RA']
 		dec_ucd = cat_dEN[i]['DEC']
-
-		sb = ucd_sb(cat_dEN[i])
+		sb = cat_dEN[i]['sb']
 		r_h = cat_dEN[i]['RH']
 		g = cat_dEN[i]['MAGCOR_AP16'][1] 
 		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
 
-		if method == 'sb'and sb>26: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+		if method == 'sb'and sb>26.5: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
 
 	if method =='mag':
-		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<20.5]
+		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<21.2]
 	if method == 'rh':
 		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['r_h']>15]
 
@@ -176,7 +175,7 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 
 	return cat_ucd_dEN
 
-cat_ucd_dEN = sample_selection(cat_ucd,cat_dEN,method='none')
+cat_ucd_dEN = sample_selection(cat_ucd,cat_dEN,method='sb')
 for i in range(len(cat_ucd_dEN)): 
 	ID = cat_ucd_dEN[i]['ID']
 	ra_ucd = cat_ucd_dEN[i]['ra']
@@ -185,9 +184,9 @@ for i in range(len(cat_ucd_dEN)):
 	g = cat_ucd_dEN[i]['g']
 	dis_M87_ucd = cat_ucd_dEN[i]['dis']
 	
-	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.97393914414, intercept =  5.62126764519)
-	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.76335828583, intercept = 4.39731813005)
-	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.57709580758, intercept = 6.80813324092)
+	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.98797298621, intercept =  5.65728112808)
+	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.77786258547, intercept = 4.42880058884)
+	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.61505756221, intercept = 6.90908931765)
 	
 	'''
 	r_maj = np.exp(np.arange(0.955,7.,0.05))
@@ -202,9 +201,9 @@ for i in range(len(cat_ucd_dEN)):
 	exp_density_r,bkg_unif_r = bkg_2d(ra_ucd,dec_ucd)                     
 	'''	
 
-	dis_ucd_gc = np.sqrt((ra_gc-ra_ucd)**2+(dec_gc-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
-	dis_ucd_gc_b = np.sqrt((ra_gc_b-ra_ucd)**2+(dec_gc_b-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
-	dis_ucd_gc_r = np.sqrt((ra_gc_r-ra_ucd)**2+(dec_gc_r-dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
+	dis_ucd_gc = np.sqrt((ra_gc - ra_ucd)**2+(dec_gc - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
+	dis_ucd_gc_b = np.sqrt((ra_gc_b - ra_ucd)**2+(dec_gc_b - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
+	dis_ucd_gc_r = np.sqrt((ra_gc_r - ra_ucd)**2+(dec_gc_r - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 
 	col_value = [ID,ra_ucd,dec_ucd,round(dis_M87_ucd,2), r_h, g]  #prepare for the info table
 	logfile.write('============'+str(ID)+' '+str(ra_ucd)+' '+str(dec_ucd)+' '+str(round(dis_M87_ucd,4))+'=================\n') 
@@ -221,6 +220,8 @@ for i in range(len(cat_ucd_dEN)):
 		gc_count_b, gc_count_cor_b, gc_expected_b, dis_ucd_gc_mask_b = gc_stat(r, dis_ucd_gc_b, exp_density_b, bkg_unif_b)
 		gc_count_r, gc_count_cor_r, gc_expected_r, dis_ucd_gc_mask_r = gc_stat(r, dis_ucd_gc_r, exp_density_r, bkg_unif_r)
 		gc_count_total += gc_count
+		gc_count_total_b += gc_count_b
+		gc_count_total_r+= gc_count_r
 
 		#Clustering Signal
 		C = np.append(C,gc_count_cor/gc_expected) 
@@ -265,7 +266,8 @@ C_mean_r, C_std_r, dis_ucd_gc_list_mean_r, gc_counts_mean_r = C_ave(gc_counts_r,
 np.set_printoptions(precision=2)
 no_ucd = len(cat_ucd_dEN[cat_ucd_dEN['class']=='UCD'])
 no_dEN= len(cat_ucd_dEN[cat_ucd_dEN['class']=='dEN'])
-print 'Number of UCDs:', no_ucd,'Number of dE,Ns:', no_dEN,', Number of GCs:',gc_count_total
+print 'Number of UCDs:', no_ucd,'Number of dE,Ns:', no_dEN
+print 'Number of GCs:',gc_count_total,'Number of Blue GCs:',gc_count_total_b,'Numer of red GCs:',gc_count_total_r
 print 'log saved in clustering_red_and_blue.log'
 print 'Radius bins:',radius,'\n'
 print '==============================='
@@ -290,8 +292,8 @@ ucd_data.write('clustering.fits',overwrite=True)
 #============plot the final figure=================================================
 fig, ax = plt.subplots()
 ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(no_ucd),fmt='ko',label = 'All GCs')
-#ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
-#ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(no_ucd),fmt='r^',label = 'Red GCs')
+ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
+ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(no_ucd),fmt='r^',label = 'Red GCs')
 ax.axhline(y=1,xmin=0,xmax=4,color='k')
 ax.set_xlabel('Aperture around UCD [kpc]',fontsize=16)
 ax.set_ylabel(r'C=<$\Sigma_{\rm measured}/\Sigma_{\rm expected}$>',fontsize=17)
