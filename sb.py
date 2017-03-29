@@ -3,9 +3,10 @@ from astropy.table import *
 from astropy.io import fits
 import numpy as np 
 from math import *
+import matplotlib.pyplot as plt 
 
 cat_dEN = Table.read('../pp.gal.nuc2.s.master.new.fits')
-cat_ucd = Table.read('../NGVS.pilot.92ucds.fits')  #catalog of UCDs
+cat_ucd = Table.read('../NGVS.pilot.92ucds.fits')  
 
 def run_sex(FileName,cat_type):
 	if cat_type == 'ucd':
@@ -39,21 +40,29 @@ def find_central_obj(catalog, ra, dec,cat_type):
 
 	return np.where(x==x_slice[0])[0][0]
 
-def read_tables(ID, ra, dec, cat_type):
-	catalog = Table.read('./sex_fits/'+cat_type+'.'+str(ID)+'.fits')
+def growth_curve(ID,radii,sbs):
+	plt.plot(radii[:-1],sbs,'.-')
+	plt.title(str(ID))
+	plt.savefig('growth_curves/'+ID+'.growth_curve.png')
+	plt.clf()
+	final_sb = sbs[-1]
+	
+	return final_sb 
+
+def cal_sb(ID, ra, dec, cat_type):
+	catalog = Table.read('sex_fits/'+cat_type+'.'+str(ID)+'.fits')
 	obj_id =  find_central_obj(catalog, ra, dec,cat_type)
 
-	r1 = 32*0.187/2
-	r2 = 64*0.187/2
+	radii = [3,4,5,6,7,8,16,32,36,40,44,48,52,56,60,64]
+	fluxes = 10**((catalog[obj_id]['MAG_APER']- 30)/(-2.5))
+	sbs  = np.array([])
+	for i in range(len(fluxes[:-1])):
+		sb = -2.5*np.log10((fluxes[i+1] - fluxes[i])/(pi*(radii[i+1]**2 - radii[i]**2)))+30         
+		sbs = np.append(sbs, sb)
 
-	mag_r1 = catalog[obj_id]['MAG_APER'][8]
-	mag_r2 = catalog[obj_id]['MAG_APER'][9]
+	sb = growth_curve(str(ID),radii,sbs)
 
-	flux_r1 = 10**((mag_r1 - 30)/(-2.5))
-	flux_r2 = 10**((mag_r2 - 30)/(-2.5))
-
-	sb = -2.5*np.log10((flux_r2-flux_r1)/(pi*(r2**2-r1**2)))+30         
-	return sb, flux_r1, flux_r2 
+	return sb
 
 def write_table(sb_column, cat_type):
 	sb_column = Column(data = np.array(sb_column), name='sb')
@@ -73,7 +82,6 @@ for cat in [(cat_ucd,'ucd'), (cat_dEN,'dEN')]:
 		ID = obj['INDEX']
 		#run_sex(str(ID), str(cat_type))
 		ra,dec = obj['RA'],obj['DEC']
-		sb,f1,f2 = read_tables(ID, ra, dec, cat_type)
-		print cat_type, ID, sb,f1,f2
+		sb = cal_sb(ID, ra, dec, cat_type)
 		sb_column.append(sb)
-	write_table(sb_column, cat_type)
+	#write_table(sb_column, cat_type)

@@ -12,9 +12,9 @@ DIS = 17.21*1000 #kpc
 M87 = (187.70583, 12.39111)
 fit_min = 25
 fit_max = 210
-bkg_level_radius  = 230
+bkg_level_radius  = 250
 step = 0.5  # in kpc
-start = 0.25
+start = 0.5
 radius = np.arange(start, start+4, step)   # in kpc 
 gc_count_total = gc_count_total_b = gc_count_total_r = 0
 
@@ -163,7 +163,7 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 		g = cat_dEN[i]['MAGCOR_AP16'][1] 
 		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
 
-		if method == 'sb'and sb>26.5: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+		if method == 'sb'and sb>25: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
 
 	if method =='mag':
 		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<21.2]
@@ -183,6 +183,7 @@ for i in range(len(cat_ucd_dEN)):
 	r_h = cat_ucd_dEN[i]['r_h']
 	g = cat_ucd_dEN[i]['g']
 	dis_M87_ucd = cat_ucd_dEN[i]['dis']
+	if str(ID) =='104068': continue
 	
 	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.98797298621, intercept =  5.65728112808)
 	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.77786258547, intercept = 4.42880058884)
@@ -268,8 +269,8 @@ no_ucd = len(cat_ucd_dEN[cat_ucd_dEN['class']=='UCD'])
 no_dEN= len(cat_ucd_dEN[cat_ucd_dEN['class']=='dEN'])
 print 'Number of UCDs:', no_ucd,'Number of dE,Ns:', no_dEN
 print 'Number of GCs:',gc_count_total,'Number of Blue GCs:',gc_count_total_b,'Numer of red GCs:',gc_count_total_r
-print 'log saved in clustering_red_and_blue.log'
-print 'Radius bins:',radius,'\n'
+print 'log saved in clustering_red_and_blue.log \n'
+print 'Radius bins:',radius
 print '==============================='
 print 'Mean DIS:',dis_ucd_gc_list_mean
 print 'Mean C:',C_mean
@@ -292,8 +293,8 @@ ucd_data.write('clustering.fits',overwrite=True)
 #============plot the final figure=================================================
 fig, ax = plt.subplots()
 ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(no_ucd),fmt='ko',label = 'All GCs')
-ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
-ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(no_ucd),fmt='r^',label = 'Red GCs')
+#ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
+#ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(no_ucd),fmt='r^',label = 'Red GCs')
 ax.axhline(y=1,xmin=0,xmax=4,color='k')
 ax.set_xlabel('Aperture around UCD [kpc]',fontsize=16)
 ax.set_ylabel(r'C=<$\Sigma_{\rm measured}/\Sigma_{\rm expected}$>',fontsize=17)
