@@ -37,30 +37,41 @@ def find_central_obj(catalog, ra, dec,cat_type):
 		x_slice = x_slice[abs(y_slice - img_width_y/2.)<limit]		
 		y_slice = y_slice[abs(y_slice - img_width_y/2.)<limit]
 		limit = limit/2. + 0.5
-
 	return np.where(x==x_slice[0])[0][0]
 
-def growth_curve(ID,radii,sbs):
-	plt.plot(radii[:-1],sbs,'.-')
-	plt.title(str(ID))
+def growth_curve(ID, cat_type, radii,mags):
+	final_sb = mags[-1]
+	r_edge = radii[-1]
+	for i in range(len(mags[:-1])):
+		if abs(mags[i+1] - mags[i])/(radii[i+1]-radii[i])<0.012: 
+			r_edge = radii[i+1]
+			plt.plot(radii[i+1],mags[i+1],'^g')
+			break
+
+	r1,r2 = 0.4*r_edge, 0.67*r_edge
+	index1  = len(radii[radii<r1]) - 1
+	index2  = len(radii[radii<r2]) - 1	
+
+	plt.plot(radii,mags,'.-')
+	plt.plot(radii[index1],mags[index1],'.r')
+	plt.plot(radii[index2],mags[index2],'.r')
+	plt.title(cat_type+str(ID))
+	plt.gca().invert_yaxis()
 	plt.savefig('growth_curves/'+ID+'.growth_curve.png')
 	plt.clf()
-	final_sb = sbs[-1]
-	
-	return final_sb 
+
+	return index1, index2
 
 def cal_sb(ID, ra, dec, cat_type):
 	catalog = Table.read('sex_fits/'+cat_type+'.'+str(ID)+'.fits')
 	obj_id =  find_central_obj(catalog, ra, dec,cat_type)
 
-	radii = [3,4,5,6,7,8,16,32,36,40,44,48,52,56,60,64]
-	fluxes = 10**((catalog[obj_id]['MAG_APER']- 30)/(-2.5))
-	sbs  = np.array([])
-	for i in range(len(fluxes[:-1])):
-		sb = -2.5*np.log10((fluxes[i+1] - fluxes[i])/(pi*(radii[i+1]**2 - radii[i]**2)))+30         
-		sbs = np.append(sbs, sb)
+	radii = np.array([4, 8,12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,110,130, 150])*0.187/2  # in arcsec
+	mags = catalog[obj_id]['MAG_APER']
+	fluxes = 10**((mags - 30)/(-2.5))
 
-	sb = growth_curve(str(ID),radii,sbs)
+	index1, index2 = growth_curve(str(ID), cat_type, radii,mags)
+	sb = -2.5*np.log10((fluxes[index2] - fluxes[index1])/(pi*(radii[index2]**2 - radii[index1]**2)))+30
 
 	return sb
 
@@ -84,4 +95,4 @@ for cat in [(cat_ucd,'ucd'), (cat_dEN,'dEN')]:
 		ra,dec = obj['RA'],obj['DEC']
 		sb = cal_sb(ID, ra, dec, cat_type)
 		sb_column.append(sb)
-	#write_table(sb_column, cat_type)
+	write_table(sb_column, cat_type)
