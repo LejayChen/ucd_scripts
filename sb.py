@@ -48,7 +48,7 @@ def growth_curve(ID, cat_type, radii,mags):
 			plt.plot(radii[i+1],mags[i+1],'^g')
 			break
 
-	r1,r2 = 0.4*r_edge, 0.67*r_edge
+	r1,r2 = 0.35*r_edge, 0.7*r_edge
 	index1  = len(radii[radii<r1]) - 1
 	index2  = len(radii[radii<r2]) - 1	
 
@@ -80,9 +80,17 @@ def write_table(sb_column, cat_type):
 	if cat_type =='ucd':
 		cat_ucd.add_column(sb_column)
 		cat_ucd.write('../new.NGVS.pilot.92ucds.fits',overwrite=True)
-	if cat_type== 'dEN':
+	if cat_type == 'dEN':
 		cat_dEN.add_column(sb_column)
 		cat_dEN.write('../new.pp.gal.nuc2.s.master.new.fits',overwrite=True)
+
+def plot_hist(sbs,cat_type):
+	sbs = sbs[~np.isnan(sbs)]
+	plt.hist(sbs)
+	plt.xlabel(r'surface brightness ${\rm mag/arcsec^2}$')
+	plt.title(cat_type + ' surface brightness histogram')
+	plt.savefig('../pics/'+cat_type+'_sb_hist.png')
+	print cat_type+' fig saved'
 
 img_ucd_width_x, img_ucd_width_y = img_scale('../ucd_newcut.31819.fits')
 img_dEN_width_x, img_dEN_width_y = img_scale('../dEN_pics/dE.N.20157.fits')
@@ -95,4 +103,6 @@ for cat in [(cat_ucd,'ucd'), (cat_dEN,'dEN')]:
 		ra,dec = obj['RA'],obj['DEC']
 		sb = cal_sb(ID, ra, dec, cat_type)
 		sb_column.append(sb)
+		print cat_type, ID,sb
 	write_table(sb_column, cat_type)
+	plot_hist(np.array(sb_column),cat_type)
