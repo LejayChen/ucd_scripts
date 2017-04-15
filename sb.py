@@ -25,24 +25,23 @@ def run_sex(FileName,cat_type):
 	else:
 		raise KeyError('cat_type argument only takes ucd or dEN')
 
-def img_scale(img_name):
-	header = fits.open(img_name)[0].header
-	x_width = header['NAXIS1']
-	y_width = header['NAXIS2']
-	return x_width, y_width
-
 def growth_curve(ID, cat_type, radii,mags):
-	final_sb = mags[-1]
+	radii = radii[mags !=99.0]
+	mags = mags[mags != 99.0]
+
 	r_edge = radii[-1]
 	for i in range(len(mags[:-1])):
 		if abs(mags[i+1] - mags[i])/(radii[i+1]-radii[i])<0.012: 
 			r_edge = radii[i+1]
 			plt.plot(radii[i+1],mags[i+1],'^g')
 			break
-	if cat_type == 'ucd':
-		r1,r2 = 0.6*r_edge, 0.9*r_edge
-	else:
-		r1,r2 = 0.33*r_edge, 0.6*r_edge
+
+	for i in range(len(mags[:-1])):
+		if abs((mags[i+1] - mags[i])/(radii[i+1] - radii[i]))<0.1:
+			r1 = radii[i]
+			break
+
+	r2 = 1.01*r_edge
 	index1  = len(radii[radii<r1]) - 1
 	index2  = len(radii[radii<r2]) - 1	
 
@@ -51,7 +50,7 @@ def growth_curve(ID, cat_type, radii,mags):
 	plt.plot(radii[index2],mags[index2],'.r')
 	plt.title(cat_type+str(ID))
 	plt.gca().invert_yaxis()
-	plt.savefig('growth_curves/'+ID+'.growth_curve.png')
+	plt.savefig('growth_curves/'+cat_type+'/'+ID+'.growth_curve.png')
 	plt.clf()
 
 	return index1, index2
@@ -60,12 +59,12 @@ def cal_sb(ID, ra, dec, cat_type):
 	catalog = Table.read('sex_fits/'+cat_type+'.'+str(ID)+'.fits')
 	obj_id =  0
 
-	radii = np.array([2,4,6, 8,10,12,14, 16,18, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,110,130, 150])*0.187/2  # in arcsec
+	radii = np.array([2,4,6, 8, 10,12,14,16,18, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,110,130,150])*0.187/2  # in arcsec
 	mags = catalog[obj_id]['MAG_APER']
 	fluxes = 10**((mags - 30)/(-2.5))
 
 	index1, index2 = growth_curve(str(ID), cat_type, radii,mags)
-	sb = -2.5*np.log10((fluxes[index2] - fluxes[index1])/(pi*(radii[index2]**2 - radii[index1]**2)))+30
+	sb = - 2.5*np.log10((fluxes[index2] - fluxes[index1])/(pi*(radii[index2]**2 - radii[index1]**2)))+30
 
 	return sb
 
@@ -87,14 +86,12 @@ def plot_hist(sbs,cat_type):
 	plt.clf()
 	print cat_type+' fig saved'
 
-img_ucd_width_x, img_ucd_width_y = img_scale('../ucd_newcut.31819.fits')
-img_dEN_width_x, img_dEN_width_y = img_scale('../dEN_pics/dE.N.20157.fits')
 for cat in [(cat_ucd,'ucd'), (cat_dEN,'dEN')]:
 	sb_column = []
 	for obj in cat[0]:
 		cat_type = cat[1]
 		ID = obj['INDEX']
-		run_sex(str(ID), str(cat_type))
+		#run_sex(str(ID), str(cat_type))
 		ra,dec = obj['RA'],obj['DEC']
 		sb = cal_sb(ID, ra, dec, cat_type)
 		sb_column.append(sb)
