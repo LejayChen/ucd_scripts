@@ -33,7 +33,6 @@ def growth_curve(ID, cat_type, radii,mags):
 	for i in range(len(mags[:-1])):
 		if abs(mags[i+1] - mags[i])/(radii[i+1]-radii[i])<0.012: 
 			r_edge = radii[i+1]
-			plt.plot(radii[i+1],mags[i+1],'^g')
 			break
 
 	for i in range(len(mags[:-1])):
@@ -49,7 +48,11 @@ def growth_curve(ID, cat_type, radii,mags):
 	plt.plot(radii[index1],mags[index1],'.r')
 	plt.plot(radii[index2],mags[index2],'.r')
 	plt.title(cat_type+str(ID))
+	plt.xlabel('aperture radius [arcsec]',fontsize=14)
+	plt.ylabel(r'${\rm m}_g$',fontsize=14)
 	plt.gca().invert_yaxis()
+	plt.tick_params(direction='in', width=1)
+	plt.tick_params(direction='in', width=1)
 	plt.savefig('growth_curves/'+cat_type+'/'+ID+'.growth_curve.png')
 	plt.clf()
 

@@ -161,9 +161,9 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 		sb = cat_dEN[i]['sb']
 		r_h = cat_dEN[i]['RH']
 		g = cat_dEN[i]['MAGCOR_AP16'][1] 
-		dis_to_M87 = sqrt((ra_ucd-M87[0])**2+(dec_ucd-M87[1])**2)/180.*pi*DIS
+		dis_to_M87 = sqrt((ra_ucd - M87[0])**2+(dec_ucd - M87[1])**2)/180.*pi*DIS
 
-		if method == 'sb'and sb>25: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+		if method == 'sb'and sb>26: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
 
 	if method =='mag':
 		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<21.2]
@@ -183,12 +183,12 @@ for i in range(len(cat_ucd_dEN)):
 	r_h = cat_ucd_dEN[i]['r_h']
 	g = cat_ucd_dEN[i]['g']
 	dis_M87_ucd = cat_ucd_dEN[i]['dis']
-	if str(ID) =='104068': continue
-	
-	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -1.98797298621, intercept =  5.65728112808)
+	if str(ID) =='104068' : continue
+
+	exp_density,bkg_unif = bkg_1d(dis_M87_ucd,slope = -2.00627135655, intercept =  5.751339432)
 	exp_density_b,bkg_unif_b = bkg_1d(dis_M87_ucd, slope = -1.77786258547, intercept = 4.42880058884)
 	exp_density_r,bkg_unif_r = bkg_1d(dis_M87_ucd, slope = -2.61505756221, intercept = 6.90908931765)
-	
+
 	'''
 	r_maj = np.exp(np.arange(0.955,7.,0.05))
 	r_maj = r_maj[r_maj<500.] 
@@ -200,8 +200,8 @@ for i in range(len(cat_ucd_dEN)):
 	exp_density,bkg_unif = bkg_2d(ra_ucd,dec_ucd)     
 	exp_density_b,bkg_unif_b = bkg_2d(ra_ucd,dec_ucd) 
 	exp_density_r,bkg_unif_r = bkg_2d(ra_ucd,dec_ucd)                     
-	'''	
 
+	'''
 	dis_ucd_gc = np.sqrt((ra_gc - ra_ucd)**2+(dec_gc - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 	dis_ucd_gc_b = np.sqrt((ra_gc_b - ra_ucd)**2+(dec_gc_b - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
 	dis_ucd_gc_r = np.sqrt((ra_gc_r - ra_ucd)**2+(dec_gc_r - dec_ucd)**2)/180.*pi*DIS  # in kpc (list)
@@ -296,17 +296,21 @@ ax.errorbar(dis_ucd_gc_list_mean,C_mean,yerr=C_std/sqrt(no_ucd),fmt='ko',label =
 #ax.errorbar(dis_ucd_gc_list_mean_b,C_mean_b,yerr=C_std_b/sqrt(no_ucd),fmt='bs',label = 'Blue GCs')
 #ax.errorbar(dis_ucd_gc_list_mean_r,C_mean_r,yerr=C_std_r/sqrt(no_ucd),fmt='r^',label = 'Red GCs')
 ax.axhline(y=1,xmin=0,xmax=4,color='k')
-ax.set_xlabel('Aperture around UCD [kpc]',fontsize=16)
-ax.set_ylabel(r'C=<$\Sigma_{\rm measured}/\Sigma_{\rm expected}$>',fontsize=17)
+ax.set_xlabel('Aperture around UCD [kpc]',fontsize=14)
+ax.set_ylabel(r'C=<$\Sigma_{\rm measured}/\Sigma_{\rm expected}$>',fontsize=16)
+ax.get_xaxis().set_tick_params(direction='in', which='major', width=1)
+ax.get_xaxis().set_tick_params(direction='in', which='minor', width=1)
+ax.get_yaxis().set_tick_params(direction='in', which='major', width=1)
+ax.get_yaxis().set_tick_params(direction='in', which='minor', width=1)
 ax.tick_params(which='major',length=12) 
 ax.tick_params(which='minor',length=5) 
 ax.set_xlim(0.25,4.5)
 ax.set_ylim(0,int(C_mean.max())+2)
 ax.legend(numpoints=1,frameon=False,loc='upper right')
-plt.title('step: '+str(step)+', fitting max: '+str(fit_max)+', start: '+str(start)+'kpc')
+#plt.title('step: '+str(step)+', fitting max: '+str(fit_max)+', start: '+str(start)+'kpc')
 #plt.savefig('pics/clustering_pics/clustering.bluered.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
 #plt.savefig('pics/clustering.bluered.2D.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
-#plt.savefig('pics/clustering.bluered.with.comp.1kpc'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
+plt.savefig('pics/clustering.with.dEN.png')
 
 plt.show()
 logfile.close()
