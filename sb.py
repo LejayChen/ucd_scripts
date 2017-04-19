@@ -25,9 +25,42 @@ def run_sex(FileName,cat_type):
 	else:
 		raise KeyError('cat_type argument only takes ucd or dEN')
 
-def growth_curve(ID, cat_type, radii,mags):
+def plot_growth_curve(index1,index2,radii, mags, mag_auto, fluxes, sbs):
+
+	fig, ax1 = plt.subplots()
+	plt.gca().invert_yaxis()
+
+	ax1.plot(radii,mags,'.-k')
+	#ax1.plot(radii[:-1],sbs,'.-')
+	ax1.plot(radii[index1],mags[index1],'.r')
+	ax1.plot(radii[index2],mags[index2],'.r')
+	ax1.axhline(y=mag_auto, xmin=0, xmax = 10, linewidth=1, linestyle='dashed', color='k')
+	ax1.set_title(cat_type+str(ID))
+	ax1.set_xlabel('aperture radius [arcsec]',fontsize=14)
+	ax1.set_ylabel(r'${\rm m}_g$',fontsize=14)
+	ax1.tick_params(direction='in', width=1)
+	
+	ax2 = ax1.twinx()
+	ax2.plot(radii,fluxes,'.-')
+	ax2.set_ylabel('flux [unit]')
+	ax2.tick_params(direction='in', width=1)
+
+	fig.tight_layout()
+	fig.savefig('growth_curves/'+cat_type+'/'+str(ID)+'.growth_curve.png')
+	fig.clf()
+
+def growth_curve(ID, cat_type, radii, mags, fluxes, mag_auto):
 	radii = radii[mags !=99.0]
 	mags = mags[mags != 99.0]
+	fluxes = fluxes[mags != 99.0]
+
+	radii1 = radii[:-1]
+	radii2 = radii[1:]
+	fluxes1 = fluxes[:-1]
+	fluxes2 = fluxes[1:]
+	sbs = - 2.5*np.log10((fluxes2 - fluxes1)/(pi*(radii2**2 - radii1**2)))+30
+	for i in range(len(sbs)): 
+		if np.isnan(sbs[i]): sbs[i] = sbs[i-1] 
 
 	r_edge = radii[-1]
 	for i in range(len(mags[:-1])):
@@ -43,30 +76,19 @@ def growth_curve(ID, cat_type, radii,mags):
 	r2 = 1.01*r_edge
 	index1  = len(radii[radii<r1]) - 1
 	index2  = len(radii[radii<r2]) - 1	
-
-	plt.plot(radii,mags,'.-')
-	plt.plot(radii[index1],mags[index1],'.r')
-	plt.plot(radii[index2],mags[index2],'.r')
-	plt.title(cat_type+str(ID))
-	plt.xlabel('aperture radius [arcsec]',fontsize=14)
-	plt.ylabel(r'${\rm m}_g$',fontsize=14)
-	plt.gca().invert_yaxis()
-	plt.tick_params(direction='in', width=1)
-	plt.tick_params(direction='in', width=1)
-	plt.savefig('growth_curves/'+cat_type+'/'+ID+'.growth_curve.png')
-	plt.clf()
+	plot_growth_curve(index1,index2,radii, mags,mag_auto, fluxes, sbs)
 
 	return index1, index2
 
 def cal_sb(ID, ra, dec, cat_type):
 	catalog = Table.read('sex_fits/'+cat_type+'.'+str(ID)+'.fits')
-	obj_id =  0
 
 	radii = np.array([2,4,6, 8, 10,12,14,16,18, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96,110,130,150])*0.187/2  # in arcsec
-	mags = catalog[obj_id]['MAG_APER']
-	fluxes = 10**((mags - 30)/(-2.5))
-
-	index1, index2 = growth_curve(str(ID), cat_type, radii,mags)
+	mags = catalog[0]['MAG_APER']
+	mag_auto = catalog[0]['MAG_AUTO']
+	fluxes = catalog[0]['FLUX_APER']
+	
+	index1, index2 = growth_curve(str(ID), cat_type, radii, mags, fluxes,  mag_auto)
 	sb = - 2.5*np.log10((fluxes[index2] - fluxes[index1])/(pi*(radii[index2]**2 - radii[index1]**2)))+30
 
 	return sb
@@ -94,11 +116,11 @@ for cat in [(cat_ucd,'ucd'), (cat_dEN,'dEN')]:
 	for obj in cat[0]:
 		cat_type = cat[1]
 		ID = obj['INDEX']
-		#run_sex(str(ID), str(cat_type))
+		run_sex(str(ID), str(cat_type))
 		ra,dec = obj['RA'],obj['DEC']
 		sb = cal_sb(ID, ra, dec, cat_type)
 		sb_column.append(sb)
 		print cat_type, ID,sb
 
-	write_table(sb_column, cat_type)
+	#write_table(sb_column, cat_type)
 	plot_hist(np.array(sb_column),cat_type)

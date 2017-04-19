@@ -78,7 +78,7 @@ def bkg_2d(ra,dec):
 
 def bkg_1d(dis_M87_ucd,slope, intercept):
 	exp_density = exp(intercept)*dis_M87_ucd**(slope)  # expected density (assume uniform in the vicinity of a UCD)
-	bkg_unif = exp(intercept)*bkg_level_radius**(slope)    # uniform bakground in the field (possibly non-GC objects)	
+	bkg_unif = exp(intercept)*bkg_level_radius**(slope)    # uniform bakground in the field (possibly non-GC objects)
 	return exp_density,bkg_unif
 
 def bkg_e(ra,dec,r_maj,intercept,slope):
@@ -163,19 +163,22 @@ def sample_selection(cat_ucd,cat_dEN, method='sb'):
 		g = cat_dEN[i]['MAGCOR_AP16'][1] 
 		dis_to_M87 = sqrt((ra_ucd - M87[0])**2+(dec_ucd - M87[1])**2)/180.*pi*DIS
 
-		if method == 'sb'and sb>26: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
+		if ('sb' in method) and sb>25.5: cat_ucd_dEN.add_row([classification, ID, ra_ucd, dec_ucd, sb, r_h, g, dis_to_M87])
 
-	if method =='mag':
-		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['g']<21.2]
-	if method == 'rh':
-		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['r_h']>15]
+	if 'mag' in method:
+		cat_ucd_dEN = cat_ucd_dEN[(cat_ucd_dEN['g']<21)*(cat_ucd_dEN['class']=='UCD')]
+	if  'rh' in method:
+		cat_ucd_dEN = cat_ucd_dEN[(cat_ucd_dEN['r_h']>14)*(cat_ucd_dEN['class']=='UCD')]
+	if  'dis' in method:
+		cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['dis']<180]
 
 	cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['dis']>fit_min]
 	cat_ucd_dEN = cat_ucd_dEN[cat_ucd_dEN['dis']<fit_max]
 
 	return cat_ucd_dEN
 
-cat_ucd_dEN = sample_selection(cat_ucd,cat_dEN,method='sb')
+select_method = 'rhsb'
+cat_ucd_dEN = sample_selection(cat_ucd,cat_dEN,method=select_method)
 for i in range(len(cat_ucd_dEN)): 
 	ID = cat_ucd_dEN[i]['ID']
 	ra_ucd = cat_ucd_dEN[i]['ra']
@@ -307,10 +310,10 @@ ax.tick_params(which='minor',length=5)
 ax.set_xlim(0.25,4.5)
 ax.set_ylim(0,int(C_mean.max())+2)
 ax.legend(numpoints=1,frameon=False,loc='upper right')
-#plt.title('step: '+str(step)+', fitting max: '+str(fit_max)+', start: '+str(start)+'kpc')
+plt.title('sample selection method:'+select_method)
 #plt.savefig('pics/clustering_pics/clustering.bluered.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
 #plt.savefig('pics/clustering.bluered.2D.'+str(start)+'.'+str(fit_max)+'.'+str(step)+'.png')
-plt.savefig('pics/clustering.with.dEN.png')
+#plt.savefig('pics/clustering.with.dEN.png')
 
 plt.show()
 logfile.close()
